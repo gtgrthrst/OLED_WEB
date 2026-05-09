@@ -1,0 +1,20 @@
+# Compiled binary
+oled_web
+oled_web.exe
+
+# Version control
+.git/
+.gitignore
+
+# Editor / Claude
+.claude/
+.vscode/
+.idea/
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Build artifacts
+*.test
+*.out

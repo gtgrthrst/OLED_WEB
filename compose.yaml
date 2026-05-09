@@ -1,0 +1,25 @@
+name: oled-designer
+
+services:
+  oled_web:
+    build:
+      context: .
+      dockerfile: Containerfile
+    image: oled_web:latest
+    container_name: oled_web
+    ports:
+      - "8090:8090"
+    restart: unless-stopped
+    read_only: true
+    tmpfs:
+      - /tmp
+    security_opt:
+      - no-new-privileges:true
+    environment:
+      - TZ=Asia/Taipei
+    healthcheck:
+      test: ["CMD", "wget", "-qO-", "http://localhost:8090/"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 10s
