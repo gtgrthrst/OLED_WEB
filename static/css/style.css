@@ -38,6 +38,105 @@ h1 { font-size:14px; font-weight:600; }
 #customSizeRow { display:flex; }
 #customSizeRow input { width:56px; }
 
+/* ── Page bar ────────────────────────────────────────────── */
+.page-bar {
+  display:flex; align-items:center; justify-content:space-between;
+  height:36px; padding:0 12px; flex-shrink:0;
+  background:var(--surf2); border-bottom:1px solid var(--border);
+  gap:8px; overflow:hidden;
+}
+.page-bar-left { display:flex; align-items:center; gap:0; flex:1; min-width:0; overflow:hidden; }
+.page-bar-right { display:flex; align-items:center; gap:6px; flex-shrink:0; }
+
+.page-bar-label { font-size:10px; color:var(--text-dim); text-transform:uppercase; letter-spacing:1px; margin-right:8px; white-space:nowrap; }
+.page-count { font-size:10px; color:var(--text-dim); white-space:nowrap; }
+
+.page-tabs {
+  display:flex; align-items:stretch; gap:1px;
+  overflow-x:auto; overflow-y:hidden; flex:1; min-width:0;
+  scrollbar-width:none;
+}
+.page-tabs::-webkit-scrollbar { display:none; }
+
+.page-tab {
+  display:flex; align-items:center; gap:2px;
+  padding:0 6px 0 10px; height:28px;
+  background:var(--surf3); border:1px solid var(--border);
+  border-radius:4px 4px 0 0; cursor:pointer;
+  flex-shrink:0; max-width:160px; min-width:60px;
+  transition:background .12s;
+  position:relative;
+}
+.page-tab:hover { background:var(--border); }
+.page-tab.active {
+  background:var(--surf); border-color:var(--border2);
+  border-bottom-color:var(--surf); /* blends with workspace */
+  z-index:1;
+}
+.page-tab-name {
+  font-size:11px; color:var(--text-dim); white-space:nowrap;
+  overflow:hidden; text-overflow:ellipsis; flex:1; min-width:0;
+  outline:none; cursor:pointer; border-radius:2px;
+}
+.page-tab.active .page-tab-name { color:var(--text); }
+.page-tab-name:focus { background:var(--surf3); padding:1px 3px; cursor:text; }
+
+.page-tab-btn {
+  width:16px; height:16px; background:none; border:none;
+  color:var(--text-dim); cursor:pointer; border-radius:2px;
+  display:flex; align-items:center; justify-content:center;
+  opacity:0; transition:opacity .1s, color .1s; flex-shrink:0;
+  padding:0;
+}
+.page-tab-btn .material-icons { font-size:12px !important; }
+.page-tab:hover .page-tab-btn { opacity:1; }
+.page-tab-btn:hover { color:var(--text); background:var(--surf3); }
+.page-tab-btn.danger:hover { color:var(--danger); }
+
+.page-add-btn {
+  width:28px; height:28px; background:none; border:1px solid var(--border);
+  color:var(--text-dim); border-radius:4px; cursor:pointer; flex-shrink:0;
+  display:flex; align-items:center; justify-content:center;
+  transition:all .12s; margin-left:4px;
+}
+.page-add-btn:hover { border-color:var(--accent); color:var(--accent); }
+.page-add-btn .material-icons { font-size:16px !important; }
+
+.project-name-wrap {
+  display:flex; align-items:center; gap:4px;
+  background:var(--surf); border:1px solid var(--border);
+  border-radius:4px; padding:2px 8px;
+}
+.project-name-input {
+  background:none; border:none; color:var(--text); font-size:11px;
+  width:120px; outline:none; padding:0;
+}
+.project-name-input:focus { color:var(--accent); }
+
+.page-bar-action {
+  display:flex; align-items:center; gap:4px; padding:3px 10px;
+  background:var(--surf); border:1px solid var(--border);
+  color:var(--text-dim); border-radius:4px; cursor:pointer;
+  font-size:11px; white-space:nowrap; transition:all .12s;
+}
+.page-bar-action:hover { border-color:var(--accent2); color:var(--accent2); }
+.page-bar-action .material-icons { font-size:14px !important; }
+
+/* Export section additions */
+.export-divider {
+  text-align:center; font-size:9px; color:var(--text-dim);
+  margin:8px 0 6px; letter-spacing:1px;
+}
+.export-project-btns { display:flex; flex-direction:column; gap:5px; }
+.btn-export-project {
+  display:flex; align-items:center; justify-content:center; gap:6px;
+  padding:8px; background:rgba(0,229,122,.08); border:1px solid rgba(0,229,122,.3);
+  color:var(--accent); border-radius:6px; cursor:pointer; font-size:11px;
+  font-weight:600; transition:all .15s; width:100%;
+}
+.btn-export-project:hover { background:rgba(0,229,122,.18); border-color:var(--accent); }
+.btn-export-project .material-icons { font-size:16px !important; }
+
 /* ── Workspace: 5-column flex ───────────────────────────── */
 .workspace { display:flex; flex:1; overflow:hidden; }
 

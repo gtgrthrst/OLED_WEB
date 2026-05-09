@@ -44,6 +44,31 @@
     </div>
   </header>
 
+  <!-- ══ Page bar ══ -->
+  <div class="page-bar" id="pageBar">
+    <div class="page-bar-left">
+      <span class="page-bar-label">頁面</span>
+      <div class="page-tabs" id="pageTabs"></div>
+      <button class="page-add-btn" id="btnAddPage" title="新增空白頁面">
+        <span class="material-icons">add</span>
+      </button>
+    </div>
+    <div class="page-bar-right">
+      <span class="page-count" id="pageCount">1 頁</span>
+      <div class="project-name-wrap">
+        <span class="material-icons" style="font-size:14px;color:var(--text-dim)">folder_open</span>
+        <input type="text" id="projectName" value="未命名專案" class="project-name-input" title="專案名稱（雙擊重新命名）" placeholder="專案名稱">
+      </div>
+      <button class="page-bar-action" id="btnExportProject" title="匯出整個專案">
+        <span class="material-icons">save_alt</span><span>匯出專案</span>
+      </button>
+      <button class="page-bar-action" id="btnImportProject" title="載入專案或頁面">
+        <span class="material-icons">upload_file</span><span>載入</span>
+      </button>
+      <input type="file" id="projectFileInput" accept=".json" style="display:none">
+    </div>
+  </div>
+
   <div class="workspace">
 
     <!-- ══ Col 1: Toolbar ══ -->
@@ -397,7 +422,7 @@
       <!-- Export -->
       <div class="side-panel">
         <div class="side-panel-title">
-          <span class="material-icons" style="font-size:14px">code</span> 匯出程式碼
+          <span class="material-icons" style="font-size:14px">code</span> 匯出目前頁面
         </div>
         <div class="form-row">
           <label>圖像名稱</label>
@@ -420,12 +445,22 @@
             <span class="exp-desc">Adafruit 格式</span>
           </button>
           <button class="btn-export" data-format="json">
-            <span class="exp-icon">💾</span>
-            <span class="exp-name">JSON</span>
-            <span class="exp-desc">含圖層儲存</span>
+            <span class="exp-icon">📄</span>
+            <span class="exp-name">頁面 JSON</span>
+            <span class="exp-desc">單頁含圖層</span>
           </button>
         </div>
-        <button class="btn-ghost" id="btnLoadJson">📂 載入 JSON</button>
+        <div class="export-divider">── 整個專案 ──</div>
+        <div class="export-project-btns">
+          <button class="btn-export-project" id="btnExportProjectAlt">
+            <span class="material-icons">save_alt</span>
+            匯出專案（全部頁面）
+          </button>
+          <button class="btn-ghost" id="btnLoadJson">
+            <span class="material-icons" style="font-size:14px">upload_file</span>
+            載入（頁面 / 專案）
+          </button>
+        </div>
         <input type="file" id="fileInput" accept=".json" style="display:none">
       </div>
 

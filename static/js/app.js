@@ -5,6 +5,12 @@
 // ══════════════════════════════════════════════════════════════════════════
 let W = 128, H = 64;
 
+// ── Page (multi-page) system ──────────────────────────────────────────────
+// Each page: {id, name, width, height, layers, activeLayerId}
+let pages = [];
+let activePageId = null;
+let projectName = '未命名專案';
+
 // ── Layer system ──────────────────────────────────────────────────────────
 // layers[0] = topmost, layers[last] = bottommost (Photoshop convention)
 let layers = [];
@@ -209,11 +215,207 @@ function reorderLayer(srcId, targetId) {
 }
 
 // ══════════════════════════════════════════════════════════════════════════
-// Canvas init
+// Page management
+// ══════════════════════════════════════════════════════════════════════════
+
+function mkPageId() { return `pg_${++_layerSeq}_${Date.now()}`; }
+
+/** Flush current canvas state into the active page object */
+function saveCurrentPage() {
+  const pg = pages.find(p => p.id === activePageId);
+  if (!pg) return;
+  pg.width  = W; pg.height = H;
+  pg.layers = layers.map(l => ({...l, grid: l.grid.map(r => [...r])}));
+  pg.activeLayerId = activeLayerId;
+}
+
+/** Load a page's state into the live canvas */
+function loadPage(pageId) {
+  saveCurrentPage();
+  const pg = pages.find(p => p.id === pageId);
+  if (!pg) return;
+  activePageId = pageId;
+  W = pg.width; H = pg.height;
+  layers = pg.layers.map(l => ({...l, grid: l.grid.map(r => [...r])}));
+  activeLayerId = pg.activeLayerId || layers[0]?.id;
+  undoStack = []; redoStack = [];
+  fitZoom(); initCanvas();
+  refreshLayerPanel(); refreshPageTabs();
+}
+
+/** Create and switch to a new blank page */
+function createNewPage(name) {
+  saveCurrentPage();
+  const bg = createLayer('背景', 'draw', 0, 0, W, H);
+  const pg = { id: mkPageId(), name: name || `頁面 ${pages.length + 1}`,
+    width: W, height: H, layers: [bg], activeLayerId: bg.id };
+  pages.push(pg);
+  activePageId = null; // suppress saveCurrentPage
+  loadPage(pg.id);
+}
+
+/** Duplicate the given page and switch to it */
+function duplicatePage(pageId) {
+  saveCurrentPage();
+  const src = pages.find(p => p.id === pageId);
+  if (!src) return;
+  const idMap = {};
+  const newLayers = src.layers.map(l => {
+    const nid = mkId(); idMap[l.id] = nid;
+    return {...l, id: nid, grid: l.grid.map(r => [...r])};
+  });
+  const pg = { id: mkPageId(), name: src.name + ' 副本',
+    width: src.width, height: src.height,
+    layers: newLayers, activeLayerId: idMap[src.activeLayerId] || newLayers[0]?.id };
+  const si = pages.findIndex(p => p.id === pageId);
+  pages.splice(si + 1, 0, pg);
+  activePageId = null;
+  loadPage(pg.id);
+  toast(`「${pg.name}」已複製`, 'ok');
+}
+
+/** Delete a page (requires at least 1 remaining) */
+function deletePage(pageId) {
+  if (pages.length <= 1) { toast('至少需要一個頁面', 'err'); return; }
+  const idx = pages.findIndex(p => p.id === pageId);
+  if (idx < 0) return;
+  const wasActive = pageId === activePageId;
+  pages.splice(idx, 1);
+  if (wasActive) {
+    activePageId = null;
+    loadPage(pages[Math.min(idx, pages.length - 1)].id);
+  } else {
+    refreshPageTabs();
+  }
+}
+
+/** Move page left or right in the page bar */
+function movePage(pageId, dir) {
+  const idx = pages.findIndex(p => p.id === pageId);
+  const ni  = idx + dir;
+  if (ni < 0 || ni >= pages.length) return;
+  [pages[idx], pages[ni]] = [pages[ni], pages[idx]];
+  refreshPageTabs();
+}
+
+/** Re-render the page tab bar */
+function refreshPageTabs() {
+  const tabsEl = document.getElementById('pageTabs');
+  tabsEl.innerHTML = '';
+  pages.forEach(pg => {
+    const tab = document.createElement('div');
+    tab.className = 'page-tab' + (pg.id === activePageId ? ' active' : '');
+    tab.dataset.id = pg.id;
+
+    const nameEl = document.createElement('span');
+    nameEl.className = 'page-tab-name';
+    nameEl.textContent = pg.name;
+    nameEl.contentEditable = 'true';
+    nameEl.spellcheck = false;
+    nameEl.addEventListener('click', e => {
+      if (pg.id !== activePageId) { e.preventDefault(); loadPage(pg.id); }
+    });
+    nameEl.addEventListener('keydown', e => {
+      if (e.key === 'Enter') { e.preventDefault(); nameEl.blur(); }
+      e.stopPropagation();
+    });
+    nameEl.addEventListener('blur', () => {
+      const v = nameEl.textContent.trim();
+      pg.name = v || pg.name;
+      nameEl.textContent = pg.name;
+    });
+
+    const dupeBtn = document.createElement('button');
+    dupeBtn.className = 'page-tab-btn'; dupeBtn.title = '複製頁面';
+    dupeBtn.innerHTML = '<span class="material-icons">copy_all</span>';
+    dupeBtn.addEventListener('click', e => { e.stopPropagation(); duplicatePage(pg.id); });
+
+    const delBtn = document.createElement('button');
+    delBtn.className = 'page-tab-btn danger'; delBtn.title = '刪除頁面';
+    delBtn.innerHTML = '<span class="material-icons">close</span>';
+    delBtn.addEventListener('click', e => {
+      e.stopPropagation();
+      if (pages.length <= 1) { toast('至少需要一個頁面', 'err'); return; }
+      if (confirm(`刪除頁面「${pg.name}」？`)) deletePage(pg.id);
+    });
+
+    tab.appendChild(nameEl); tab.appendChild(dupeBtn); tab.appendChild(delBtn);
+    tab.addEventListener('click', () => { if (pg.id !== activePageId) loadPage(pg.id); });
+    tabsEl.appendChild(tab);
+  });
+
+  const cnt = document.getElementById('pageCount');
+  if (cnt) cnt.textContent = `${pages.length} 頁`;
+}
+
+// ══════════════════════════════════════════════════════════════════════════
+// Project export / import
+// ══════════════════════════════════════════════════════════════════════════
+
+function exportProject() {
+  saveCurrentPage();
+  const pn = document.getElementById('projectName')?.value.trim() || projectName;
+  projectName = pn;
+  const proj = {
+    version: '1.0', name: pn,
+    pages: pages.map(p => ({...p, layers: p.layers.map(l => ({...l, grid: l.grid.map(r=>[...r])}))})),
+    activePageId,
+  };
+  dlText(JSON.stringify(proj, null, 2), pn + '.oled.json', 'application/json');
+  toast('專案已匯出', 'ok');
+}
+
+function importProjectFile(file) {
+  const r = new FileReader();
+  r.onload = e => {
+    try {
+      const d = JSON.parse(e.target.result);
+      if (d.pages && Array.isArray(d.pages) && d.pages.length) {
+        // ── Project format ──
+        projectName = d.name || '匯入專案';
+        const pnEl = document.getElementById('projectName');
+        if (pnEl) pnEl.value = projectName;
+        pages = d.pages.map(p => ({
+          ...p,
+          layers: (p.layers||[]).map(l=>({...l, grid:(l.grid||[]).map(r=>[...r])}))
+        }));
+        activePageId = null;
+        loadPage(d.activePageId || pages[0].id);
+        toast(`專案「${projectName}」已載入（${pages.length} 頁）`, 'ok');
+      } else if (d.width && d.height) {
+        // ── Single-page / legacy format ── append as new page
+        saveCurrentPage();
+        const bg = d.layers
+          ? d.layers.map(l=>({...l, id: mkId(), grid:(l.grid||[]).map(r=>[...r])}))
+          : [createLayer('背景','draw',0,0,d.width,d.height, (d.pixels||[]).map(r=>[...r]))];
+        const pg = { id: mkPageId(), name: d.name || '匯入頁面',
+          width: d.width, height: d.height,
+          layers: bg, activeLayerId: bg[0]?.id };
+        pages.push(pg);
+        activePageId = null;
+        loadPage(pg.id);
+        toast('頁面已匯入為新頁面', 'ok');
+      } else {
+        throw new Error('無法識別的格式');
+      }
+    } catch(err) { toast('匯入失敗：' + err.message, 'err'); }
+  };
+  r.readAsText(file);
+}
+
+// ══════════════════════════════════════════════════════════════════════════
+// Canvas init (layer init now happens via initPages → createNewPage)
 // ══════════════════════════════════════════════════════════════════════════
 function initLayers() {
-  layers = [createLayer('背景', 'draw', 0, 0, W, H)];
+  // Initialize first page
+  const bg = createLayer('背景', 'draw', 0, 0, W, H);
+  const pg = { id: mkPageId(), name: '頁面 1', width: W, height: H,
+               layers: [bg], activeLayerId: bg.id };
+  pages     = [pg];
+  activePageId = pg.id;
+  layers    = [createLayer('背景', 'draw', 0, 0, W, H)];
   activeLayerId = layers[0].id;
+  pg.activeLayerId = layers[0].id;
 }
 
 function initCanvas() {
@@ -232,8 +434,10 @@ function fitZoom() {
 function init() {
   initLayers(); fitZoom(); initCanvas();
   bindEvents(); updateToolHighlight(); syncBrushPreview();
-  buildIconPanel(); refreshLayerPanel();
+  buildIconPanel(); refreshLayerPanel(); refreshPageTabs();
   document.getElementById('previewInfo').textContent = `${W}×${H} px`;
+  const pnEl = document.getElementById('projectName');
+  if (pnEl) pnEl.value = projectName;
   syncThresholdLabel();
   loadCodepoints(); _ensureFont();
 }
@@ -966,6 +1170,7 @@ function updateInfo(){
 // Export
 // ══════════════════════════════════════════════════════════════════════════
 async function doExport(format){
+  saveCurrentPage();
   const name=document.getElementById('exportName').value.trim()||'my_image';
   const comp=getComposite();
   if(format==='json'){dlText(JSON.stringify({width:W,height:H,layers,activeLayerId,name},null,2),name+'.json','application/json');toast('JSON 已下載（含圖層）','ok');return;}
@@ -980,27 +1185,7 @@ function showModal(code,format,name){
   document.getElementById('btnDownloadCode').onclick=()=>dlText(code,name+(format==='c_array'?'.h':'.py'),'text/plain');
 }
 function dlText(text,filename,mime){const a=Object.assign(document.createElement('a'),{href:URL.createObjectURL(new Blob([text],{type:mime})),download:filename});a.click();setTimeout(()=>URL.revokeObjectURL(a.href),1000);}
-function loadJson(file){
-  const r=new FileReader();
-  r.onload=e=>{
-    try{
-      const d=JSON.parse(e.target.result);
-      saveUndo();
-      if(d.layers&&d.layers.length){
-        // New format with layers
-        W=d.width;H=d.height;layers=d.layers.map(l=>({...l,grid:l.grid.map(r=>[...r])}));
-        activeLayerId=d.activeLayerId||layers[0]?.id;
-      } else if(d.pixels){
-        // Legacy flat format → convert to single layer
-        W=d.width;H=d.height;
-        layers=[createLayer('背景','draw',0,0,W,H,d.pixels.map(r=>[...r]))];
-        activeLayerId=layers[0].id;
-      } else throw new Error('格式錯誤');
-      if(d.name)document.getElementById('exportName').value=d.name;
-      fitZoom();initCanvas();refreshLayerPanel();toast('設計已載入','ok');
-    }catch(err){toast('載入失敗：'+err.message,'err');}
-  };r.readAsText(file);
-}
+function loadJson(file) { importProjectFile(file); }
 
 // ══════════════════════════════════════════════════════════════════════════
 // Canvas resize
@@ -1061,6 +1246,13 @@ function syncThresholdLabel(){
 // Event binding
 // ══════════════════════════════════════════════════════════════════════════
 function bindEvents(){
+  // Page bar
+  document.getElementById('btnAddPage').addEventListener('click', () => createNewPage());
+  document.getElementById('btnExportProject').addEventListener('click', exportProject);
+  document.getElementById('btnImportProject').addEventListener('click', () => document.getElementById('projectFileInput').click());
+  document.getElementById('projectFileInput').addEventListener('change', e => { if(e.target.files[0]) importProjectFile(e.target.files[0]); e.target.value=''; });
+  document.getElementById('projectName')?.addEventListener('change', e => { projectName = e.target.value.trim() || projectName; });
+
   document.getElementById('btnToggleLayers').addEventListener('click',toggleLayerSidebar);
   document.querySelectorAll('.tool-btn').forEach(btn=>{btn.addEventListener('click',()=>{tool=btn.dataset.tool;if(tool!=='select')selectRect=null;updateToolHighlight();});});
   document.getElementById('brushSize').addEventListener('input',syncBrushPreview);
@@ -1132,6 +1324,7 @@ function bindEvents(){
   document.querySelectorAll('.btn-export').forEach(btn=>btn.addEventListener('click',()=>doExport(btn.dataset.format)));
   document.getElementById('btnLoadJson').addEventListener('click',()=>document.getElementById('fileInput').click());
   document.getElementById('fileInput').addEventListener('change',e=>{if(e.target.files[0])loadJson(e.target.files[0]);e.target.value='';});
+  document.getElementById('btnExportProjectAlt')?.addEventListener('click', exportProject);
   document.getElementById('btnCloseModal').addEventListener('click',()=>document.getElementById('codeModal').style.display='none');
   document.getElementById('btnCopyCode').addEventListener('click',()=>navigator.clipboard.writeText(document.getElementById('codeOutput').textContent).then(()=>toast('已複製到剪貼簿','ok')));
   document.getElementById('codeModal').addEventListener('click',e=>{if(e.target.id==='codeModal')document.getElementById('codeModal').style.display='none';});
