@@ -148,7 +148,7 @@ function addLayer(name, type, x, y, w, h, grid) {
   const l = createLayer(name, type, x, y, w, h, grid);
   layers.unshift(l);        // add to top
   activeLayerId = l.id;
-  refreshLayerPanel();
+  refreshLayerPanel(); refreshLayerExportList();
   return l;
 }
 
@@ -159,7 +159,7 @@ function deleteLayer(id) {
   saveUndo();
   layers.splice(idx, 1);
   if (activeLayerId === id) activeLayerId = layers[Math.min(idx, layers.length-1)].id;
-  refreshLayerPanel(); render(); renderPreview(); updateInfo();
+  refreshLayerPanel(); refreshLayerExportList(); render(); renderPreview(); updateInfo();
 }
 
 function duplicateLayer(id) {
@@ -298,6 +298,152 @@ function reorderLayer(srcId, targetId) {
   const [moved] = layers.splice(si, 1);
   layers.splice(ti, 0, moved);
   refreshLayerPanel(); render();
+  refreshLayerExportList();
+}
+
+// ══════════════════════════════════════════════════════════════════════════
+// Column resize handles
+// ══════════════════════════════════════════════════════════════════════════
+function initResizeHandles() {
+  document.querySelectorAll('.col-resizer').forEach(handle => {
+    handle.addEventListener('mousedown', e => {
+      const targetId  = handle.dataset.target;
+      const inverted  = handle.dataset.inverted === 'true';
+      const minW      = parseInt(handle.dataset.min) || 80;
+      const targetEl  = document.getElementById(targetId);
+      if (!targetEl) return;
+
+      const startX    = e.clientX;
+      const startW    = targetEl.offsetWidth;
+
+      // Disable CSS transitions while dragging to avoid lag
+      const prevTrans = targetEl.style.transition;
+      targetEl.style.transition = 'none';
+      handle.classList.add('rsz-active');
+      document.body.style.cursor    = 'col-resize';
+      document.body.style.userSelect = 'none';
+
+      const onMove = ev => {
+        const dx = ev.clientX - startX;
+        const newW = inverted ? startW - dx : startW + dx;
+        targetEl.style.width = Math.max(minW, newW) + 'px';
+      };
+      const onUp = () => {
+        document.removeEventListener('mousemove', onMove);
+        document.removeEventListener('mouseup', onUp);
+        targetEl.style.transition  = prevTrans;
+        handle.classList.remove('rsz-active');
+        document.body.style.cursor    = '';
+        document.body.style.userSelect = '';
+      };
+      document.addEventListener('mousemove', onMove);
+      document.addEventListener('mouseup',   onUp);
+      e.preventDefault();
+    });
+  });
+}
+
+// ══════════════════════════════════════════════════════════════════════════
+// Layer export (per-layer files)
+// ══════════════════════════════════════════════════════════════════════════
+
+/** Rebuild the layer list in the "按圖層匯出" section */
+function refreshLayerExportList() {
+  const listEl  = document.getElementById('layerExportList');
+  const btnEl   = document.getElementById('btnExportLayers');
+  const labelEl = document.getElementById('btnExportLayersLabel');
+  if (!listEl) return;
+
+  listEl.innerHTML = '';
+  const THUMB_W = 36, THUMB_H = Math.max(1, Math.round(THUMB_W * H / W));
+
+  layers.forEach(layer => {
+    const item = document.createElement('label');
+    item.className = 'layer-export-item';
+
+    const cb = document.createElement('input');
+    cb.type = 'checkbox'; cb.checked = layer.visible; cb.dataset.layerId = layer.id;
+    cb.addEventListener('change', updateLayerExportBtn);
+
+    const thumb = document.createElement('canvas');
+    thumb.width = THUMB_W; thumb.height = THUMB_H;
+    thumb.className = 'layer-export-thumb';
+    renderThumb(layer, thumb);
+
+    const info = document.createElement('div');
+    info.className = 'layer-export-info';
+    const nameSpan = document.createElement('div');
+    nameSpan.className = 'layer-export-name'; nameSpan.textContent = layer.name;
+    const metaSpan = document.createElement('div');
+    metaSpan.className = 'layer-export-meta';
+    metaSpan.textContent = `${layer.type} · ${layer.w}×${layer.h}`;
+    info.appendChild(nameSpan); info.appendChild(metaSpan);
+
+    item.appendChild(cb); item.appendChild(thumb); item.appendChild(info);
+    item.addEventListener('change', () => item.classList.toggle('checked', cb.checked));
+    if (cb.checked) item.classList.add('checked');
+    listEl.appendChild(item);
+  });
+
+  updateLayerExportBtn();
+}
+
+function updateLayerExportBtn() {
+  const cbs   = document.querySelectorAll('#layerExportList input[type="checkbox"]');
+  const count = [...cbs].filter(c => c.checked).length;
+  const btn   = document.getElementById('btnExportLayers');
+  const label = document.getElementById('btnExportLayersLabel');
+  if (!btn) return;
+  btn.disabled = count === 0;
+  label.textContent = count ? `匯出選取的 ${count} 個圖層` : '請選取要匯出的圖層';
+}
+
+async function exportSelectedLayers() {
+  const format  = document.getElementById('layerExportFormat').value;
+  const baseName = (document.getElementById('exportName').value || 'image').trim();
+  const cbs     = [...document.querySelectorAll('#layerExportList input[type="checkbox"]:checked')];
+  if (!cbs.length) { toast('請選取至少一個圖層', 'err'); return; }
+
+  let done = 0;
+  for (const cb of cbs) {
+    const layer = layers.find(l => l.id === cb.dataset.layerId);
+    if (!layer) continue;
+
+    // Safe filename
+    const safeName = `${baseName}_${layer.name}`.replace(/[^a-zA-Z0-9_\-一-鿿]/g, '_');
+
+    if (format === 'json') {
+      // Export layer's own bounding box
+      const data = { width: layer.w, height: layer.h,
+        pixels: layer.grid.map(r => [...r]), name: safeName };
+      dlText(JSON.stringify(data, null, 2), safeName + '.json', 'application/json');
+    } else {
+      // Place layer onto full canvas and export
+      const grid = Array.from({length: H}, () => new Array(W).fill(0));
+      for (let gy = 0; gy < layer.h; gy++) {
+        for (let gx = 0; gx < layer.w; gx++) {
+          const rx = layer.x + gx, ry = layer.y + gy;
+          if (rx >= 0 && ry >= 0 && rx < W && ry < H && layer.grid[gy]?.[gx])
+            grid[ry][rx] = 1;
+        }
+      }
+      try {
+        const res  = await fetch('/api/export', {
+          method: 'POST', headers: {'Content-Type': 'application/json'},
+          body: JSON.stringify({width: W, height: H, pixels: grid, format, name: safeName}),
+        });
+        const d = await res.json();
+        if (d.code) {
+          const ext = format === 'c_array' ? '.h' : '.py';
+          dlText(d.code, safeName + ext, 'text/plain');
+        }
+      } catch(err) { toast(`匯出「${layer.name}」失敗：${err.message}`, 'err'); continue; }
+    }
+    done++;
+    // Stagger downloads slightly to avoid browser blocking
+    await new Promise(r => setTimeout(r, 120));
+  }
+  toast(`已匯出 ${done} 個圖層`, 'ok');
 }
 
 // ══════════════════════════════════════════════════════════════════════════
@@ -326,7 +472,7 @@ function loadPage(pageId) {
   activeLayerId = pg.activeLayerId || layers[0]?.id;
   undoStack = []; redoStack = [];
   fitZoom(); initCanvas();
-  refreshLayerPanel(); refreshPageTabs();
+  refreshLayerPanel(); refreshPageTabs(); refreshLayerExportList();
 }
 
 /** Create and switch to a new blank page */
@@ -589,6 +735,8 @@ function init() {
   initLayers(); fitZoom(); initCanvas();
   bindEvents(); updateToolHighlight(); syncBrushPreview();
   buildIconPanel(); refreshLayerPanel(); refreshPageTabs();
+  initResizeHandles();
+  refreshLayerExportList();
   document.getElementById('previewInfo').textContent = `${W}×${H} px`;
   const pnEl = document.getElementById('projectName');
   if (pnEl) pnEl.value = projectName;
@@ -1380,7 +1528,9 @@ function syncBrushPreview(){
 // ══════════════════════════════════════════════════════════════════════════
 function toggleLayerSidebar(){
   const s=document.getElementById('layerSidebar'),b=document.getElementById('btnToggleLayers');
-  s.classList.toggle('open');b.classList.toggle('active');
+  const r=document.getElementById('rszSidebar');
+  s.classList.toggle('open'); b.classList.toggle('active');
+  if(r) r.style.display = s.classList.contains('open') ? '' : 'none';
 }
 
 function updateToolHighlight(){
@@ -1484,6 +1634,16 @@ function bindEvents(){
   document.getElementById('btnLoadJson').addEventListener('click',()=>document.getElementById('fileInput').click());
   document.getElementById('fileInput').addEventListener('change',e=>{if(e.target.files[0])loadJson(e.target.files[0]);e.target.value='';});
   document.getElementById('btnExportProjectAlt')?.addEventListener('click', exportProject);
+  // Layer export
+  document.getElementById('btnExportLayers').addEventListener('click', exportSelectedLayers);
+  document.getElementById('btnSelAllLayers').addEventListener('click', () => {
+    document.querySelectorAll('#layerExportList input[type="checkbox"]').forEach(cb=>{cb.checked=true;cb.closest('.layer-export-item')?.classList.add('checked');});
+    updateLayerExportBtn();
+  });
+  document.getElementById('btnSelNoneLayers').addEventListener('click', () => {
+    document.querySelectorAll('#layerExportList input[type="checkbox"]').forEach(cb=>{cb.checked=false;cb.closest('.layer-export-item')?.classList.remove('checked');});
+    updateLayerExportBtn();
+  });
   document.getElementById('btnCloseModal').addEventListener('click',()=>document.getElementById('codeModal').style.display='none');
   document.getElementById('btnCopyCode').addEventListener('click',()=>navigator.clipboard.writeText(document.getElementById('codeOutput').textContent).then(()=>toast('已複製到剪貼簿','ok')));
   document.getElementById('codeModal').addEventListener('click',e=>{if(e.target.id==='codeModal')document.getElementById('codeModal').style.display='none';});

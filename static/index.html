@@ -184,6 +184,8 @@
 
     </aside>
 
+    <div class="col-resizer" data-target="toolbar" data-min="90" title="拖曳調整寬度"></div>
+
     <!-- ══ Col 2: Layer sidebar (toggleable) ══ -->
     <aside class="layer-sidebar" id="layerSidebar">
       <div class="layer-sidebar-header">
@@ -208,6 +210,8 @@
       <div class="layer-hint">雙擊名稱重新命名 · 拖曳排序 · M 鍵移動</div>
     </aside>
 
+    <div class="col-resizer" id="rszSidebar" data-target="layerSidebar" data-min="120" title="拖曳調整寬度" style="display:none"></div>
+
     <!-- ══ Col 3: Canvas ══ -->
     <main class="canvas-area" id="canvasArea">
       <div class="canvas-wrapper" id="canvasWrapper">
@@ -216,8 +220,10 @@
       </div>
     </main>
 
+    <div class="col-resizer" data-target="iconsCol" data-inverted="true" data-min="150" title="拖曳調整寬度"></div>
+
     <!-- ══ Col 4: Icons column ══ -->
-    <aside class="icons-col">
+    <aside class="icons-col" id="iconsCol">
 
       <!-- Text Tool Panel -->
       <div class="side-panel" id="textPanel" style="display:none">
@@ -369,8 +375,10 @@
 
     </aside>
 
+    <div class="col-resizer" data-target="toolsCol" data-inverted="true" data-min="150" title="拖曳調整寬度"></div>
+
     <!-- ══ Col 5: Import / Export column ══ -->
-    <aside class="tools-col">
+    <aside class="tools-col" id="toolsCol">
 
       <!-- Image Import -->
       <div class="side-panel">
@@ -450,6 +458,29 @@
             <span class="exp-desc">單頁含圖層</span>
           </button>
         </div>
+        <div class="export-divider">── 按圖層匯出 ──</div>
+        <div class="layer-export-section">
+          <div class="layer-export-top">
+            <select id="layerExportFormat" title="匯出格式">
+              <option value="micropython">MicroPython</option>
+              <option value="framebuf">Framebuf</option>
+              <option value="c_array">C / Arduino</option>
+              <option value="json">JSON</option>
+            </select>
+            <div class="layer-export-sel-btns">
+              <button class="btn-tiny" id="btnSelAllLayers">全選</button>
+              <button class="btn-tiny" id="btnSelNoneLayers">全不選</button>
+            </div>
+          </div>
+          <div class="layer-export-list" id="layerExportList">
+            <!-- populated by JS -->
+          </div>
+          <button class="btn-export-layers" id="btnExportLayers" disabled>
+            <span class="material-icons">layers</span>
+            <span id="btnExportLayersLabel">匯出選取的圖層</span>
+          </button>
+        </div>
+
         <div class="export-divider">── 整個專案 ──</div>
         <div class="export-project-btns">
           <button class="btn-export-project" id="btnExportProjectAlt">

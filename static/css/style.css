@@ -122,6 +122,45 @@ h1 { font-size:14px; font-weight:600; }
 .page-bar-action:hover { border-color:var(--accent2); color:var(--accent2); }
 .page-bar-action .material-icons { font-size:14px !important; }
 
+/* ── Layer export section ────────────────────────────────── */
+.layer-export-section { margin-top:2px; }
+.layer-export-top {
+  display:flex; align-items:center; justify-content:space-between;
+  gap:6px; margin-bottom:6px;
+}
+.layer-export-top select { flex:1; font-size:11px; padding:4px 6px; }
+.layer-export-sel-btns { display:flex; gap:3px; flex-shrink:0; }
+
+.layer-export-list {
+  max-height:140px; overflow-y:auto; overflow-x:hidden;
+  display:flex; flex-direction:column; gap:2px; margin-bottom:7px;
+}
+.layer-export-item {
+  display:flex; align-items:center; gap:7px;
+  padding:4px 6px; border-radius:4px; cursor:pointer;
+  border:1px solid var(--border); background:var(--surf2); transition:all .1s;
+}
+.layer-export-item:hover { border-color:var(--border2); }
+.layer-export-item.checked { border-color:var(--accent2); background:rgba(59,158,255,.08); }
+.layer-export-item input[type="checkbox"] { accent-color:var(--accent2); cursor:pointer; flex-shrink:0; }
+.layer-export-thumb {
+  flex-shrink:0; border-radius:2px; border:1px solid var(--border);
+  image-rendering:pixelated;
+}
+.layer-export-info { flex:1; min-width:0; }
+.layer-export-name { font-size:11px; color:var(--text); white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+.layer-export-meta { font-size:9px; color:var(--text-dim); }
+
+.btn-export-layers {
+  display:flex; align-items:center; justify-content:center; gap:6px;
+  width:100%; padding:7px; font-size:11px; font-weight:600;
+  background:rgba(59,158,255,.1); border:1px solid rgba(59,158,255,.4);
+  color:var(--accent2); border-radius:6px; cursor:pointer; transition:all .15s;
+}
+.btn-export-layers:hover:not([disabled]) { background:rgba(59,158,255,.2); border-color:var(--accent2); }
+.btn-export-layers[disabled] { opacity:.45; cursor:not-allowed; }
+.btn-export-layers .material-icons { font-size:15px !important; }
+
 /* Export section additions */
 .export-divider {
   text-align:center; font-size:9px; color:var(--text-dim);
@@ -139,6 +178,18 @@ h1 { font-size:14px; font-weight:600; }
 
 /* ── Workspace: 5-column flex ───────────────────────────── */
 .workspace { display:flex; flex:1; overflow:hidden; }
+
+/* ── Column resize handles ───────────────────────────────── */
+.col-resizer {
+  width: 4px; flex-shrink: 0;
+  background: var(--border); cursor: col-resize;
+  transition: background .15s; position: relative; z-index: 10;
+}
+/* Wider invisible hit area */
+.col-resizer::after {
+  content: ''; position: absolute; inset: 0 -4px;
+}
+.col-resizer:hover, .col-resizer.rsz-active { background: var(--accent2); }
 
 /* ── Col 1: Toolbar ─────────────────────────────────────── */
 .toolbar {
