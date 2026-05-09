@@ -175,6 +175,92 @@ function duplicateLayer(id) {
   toast('圖層已複製', 'ok');
 }
 
+/** Copy a layer from the active page to a different page */
+function copyLayerToPage(layerId, targetPageId) {
+  // Ensure current page state is flushed first
+  saveCurrentPage();
+
+  const srcPage   = pages.find(p => p.id === activePageId);
+  const targetPage= pages.find(p => p.id === targetPageId);
+  if (!srcPage || !targetPage) return;
+
+  // Find the layer in the current (flushed) page state
+  const srcLayer = srcPage.layers.find(l => l.id === layerId);
+  if (!srcLayer) return;
+
+  const copy = {
+    ...srcLayer,
+    id: mkId(),
+    name: srcLayer.name + ' (from ' + (srcPage.name) + ')',
+    grid: srcLayer.grid.map(r => [...r]),
+  };
+
+  // Prepend to target page's layers
+  targetPage.layers.unshift(copy);
+  targetPage.activeLayerId = copy.id;
+
+  // If we are currently viewing the target page, sync back to live state
+  if (targetPageId === activePageId) {
+    layers = targetPage.layers.map(l => ({...l, grid: l.grid.map(r=>[...r])}));
+    activeLayerId = copy.id;
+    refreshLayerPanel(); render(); renderPreview();
+  }
+
+  toast(`圖層「${srcLayer.name}」已複製到「${targetPage.name}」`, 'ok');
+}
+
+/** Show a dropdown near anchorEl listing all pages to copy layerId into */
+function showCopyToPageDropdown(layerId, anchorEl) {
+  // Close any existing dropdown
+  document.getElementById('ctpDropdown')?.remove();
+
+  const others = pages.filter(p => p.id !== activePageId);
+  if (!others.length) {
+    toast('沒有其他頁面，請先新增頁面', 'err');
+    return;
+  }
+
+  const drop = document.createElement('div');
+  drop.id = 'ctpDropdown';
+  drop.className = 'ctp-dropdown';
+
+  const label = document.createElement('div');
+  label.className = 'ctp-label';
+  label.textContent = '複製到頁面';
+  drop.appendChild(label);
+
+  others.forEach(pg => {
+    const btn = document.createElement('button');
+    btn.className = 'ctp-item';
+    const ic = document.createElement('span');
+    ic.className = 'material-icons';
+    ic.textContent = 'insert_drive_file';
+    const nm = document.createElement('span');
+    nm.textContent = pg.name;
+    btn.appendChild(ic); btn.appendChild(nm);
+    btn.addEventListener('click', e => {
+      e.stopPropagation();
+      copyLayerToPage(layerId, pg.id);
+      drop.remove();
+    });
+    drop.appendChild(btn);
+  });
+
+  // Position below the anchor button
+  const rect = anchorEl.getBoundingClientRect();
+  drop.style.cssText = `position:fixed;left:${rect.left}px;top:${rect.bottom+4}px;z-index:9999`;
+  document.body.appendChild(drop);
+
+  // Auto-close on outside click
+  const onOutside = e => {
+    if (!drop.contains(e.target) && e.target !== anchorEl) {
+      drop.remove();
+      document.removeEventListener('mousedown', onOutside, true);
+    }
+  };
+  setTimeout(() => document.addEventListener('mousedown', onOutside, true), 0);
+}
+
 function mergeDown(id) {
   const idx = layers.findIndex(l => l.id === id);
   if (idx < 0 || idx >= layers.length - 1) { toast('已是最底層', 'err'); return; }
@@ -1041,11 +1127,16 @@ function refreshLayerPanel(){
     dupeBtn.className='layer-action-btn';dupeBtn.title='複製圖層';dupeBtn.innerHTML='<span class="material-icons">copy_all</span>';
     dupeBtn.addEventListener('click',e=>{e.stopPropagation();duplicateLayer(layer.id);});
 
+    const ctpBtn=document.createElement('button');
+    ctpBtn.className='layer-action-btn ctp-btn';ctpBtn.title='複製到其他頁面';
+    ctpBtn.innerHTML='<span class="material-icons">drive_file_move_rtl</span>';
+    ctpBtn.addEventListener('click',e=>{e.stopPropagation();showCopyToPageDropdown(layer.id,ctpBtn);});
+
     const delBtn=document.createElement('button');
     delBtn.className='layer-action-btn danger';delBtn.title='刪除圖層';delBtn.innerHTML='<span class="material-icons">delete</span>';
     delBtn.addEventListener('click',e=>{e.stopPropagation();if(layers.length<=1){toast('至少需要一個圖層','err');return;}deleteLayer(layer.id);});
 
-    btns.appendChild(dupeBtn);btns.appendChild(delBtn);
+    btns.appendChild(dupeBtn);btns.appendChild(ctpBtn);btns.appendChild(delBtn);
 
     row.appendChild(visBtn);row.appendChild(thumb);row.appendChild(info);row.appendChild(btns);
 
