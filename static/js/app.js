@@ -399,26 +399,40 @@ function updateLayerExportBtn() {
 }
 
 async function exportSelectedLayers() {
-  const format  = document.getElementById('layerExportFormat').value;
+  if (typeof JSZip === 'undefined') {
+    toast('JSZip 尚未載入，請稍後再試', 'err'); return;
+  }
+  const format   = document.getElementById('layerExportFormat').value;
   const baseName = (document.getElementById('exportName').value || 'image').trim();
-  const cbs     = [...document.querySelectorAll('#layerExportList input[type="checkbox"]:checked')];
+  const cbs      = [...document.querySelectorAll('#layerExportList input[type="checkbox"]:checked')];
   if (!cbs.length) { toast('請選取至少一個圖層', 'err'); return; }
 
-  let done = 0;
+  // Update button to show progress
+  const btn = document.getElementById('btnExportLayers');
+  const lbl = document.getElementById('btnExportLayersLabel');
+  btn.disabled = true;
+  lbl.textContent = '打包中...';
+
+  const zip  = new JSZip();
+  const ext  = format === 'c_array' ? '.h' : format === 'json' ? '.json' : '.py';
+  const mime = format === 'json' ? 'application/json' : 'text/plain';
+  let   done = 0, failed = 0;
+
   for (const cb of cbs) {
     const layer = layers.find(l => l.id === cb.dataset.layerId);
     if (!layer) continue;
 
-    // Safe filename
     const safeName = `${baseName}_${layer.name}`.replace(/[^a-zA-Z0-9_\-一-鿿]/g, '_');
+    const filename = safeName + ext;
 
     if (format === 'json') {
-      // Export layer's own bounding box
+      // JSON: export layer's own bounding box (no canvas offset)
       const data = { width: layer.w, height: layer.h,
         pixels: layer.grid.map(r => [...r]), name: safeName };
-      dlText(JSON.stringify(data, null, 2), safeName + '.json', 'application/json');
+      zip.file(filename, JSON.stringify(data, null, 2));
+      done++;
     } else {
-      // Place layer onto full canvas and export
+      // Code formats: render layer onto full canvas (preserves position)
       const grid = Array.from({length: H}, () => new Array(W).fill(0));
       for (let gy = 0; gy < layer.h; gy++) {
         for (let gx = 0; gx < layer.w; gx++) {
@@ -428,22 +442,54 @@ async function exportSelectedLayers() {
         }
       }
       try {
-        const res  = await fetch('/api/export', {
+        const res = await fetch('/api/export', {
           method: 'POST', headers: {'Content-Type': 'application/json'},
           body: JSON.stringify({width: W, height: H, pixels: grid, format, name: safeName}),
         });
         const d = await res.json();
-        if (d.code) {
-          const ext = format === 'c_array' ? '.h' : '.py';
-          dlText(d.code, safeName + ext, 'text/plain');
-        }
-      } catch(err) { toast(`匯出「${layer.name}」失敗：${err.message}`, 'err'); continue; }
+        if (d.error) throw new Error(d.error);
+        zip.file(filename, d.code);
+        done++;
+      } catch(err) {
+        // Still include an error placeholder in zip
+        zip.file(safeName + '.error.txt', `Export failed: ${err.message}\nLayer: ${layer.name}`);
+        failed++;
+      }
     }
-    done++;
-    // Stagger downloads slightly to avoid browser blocking
-    await new Promise(r => setTimeout(r, 120));
+    // Update progress label
+    lbl.textContent = `打包中 ${done + failed}/${cbs.length}...`;
   }
-  toast(`已匯出 ${done} 個圖層`, 'ok');
+
+  if (done === 0) {
+    btn.disabled = false; lbl.textContent = '打包成 ZIP 下載';
+    toast('沒有成功匯出任何圖層', 'err'); return;
+  }
+
+  // Add a README with metadata
+  const pageName = pages.find(p => p.id === activePageId)?.name || '頁面';
+  zip.file('README.txt',
+    `OLED Pixel Designer – Layer Export\n` +
+    `Project : ${projectName}\n` +
+    `Page    : ${pageName}\n` +
+    `Format  : ${format}\n` +
+    `Canvas  : ${W}×${H} px\n` +
+    `Exported: ${done} layer(s)` + (failed ? `, ${failed} failed` : '') + `\n`
+  );
+
+  // Generate ZIP and download
+  try {
+    const blob    = await zip.generateAsync({type: 'blob', compression: 'DEFLATE',
+                                              compressionOptions: {level: 6}});
+    const zipName = `${baseName}_layers.zip`;
+    const url     = URL.createObjectURL(blob);
+    Object.assign(document.createElement('a'), {href: url, download: zipName}).click();
+    setTimeout(() => URL.revokeObjectURL(url), 2000);
+    toast(`已打包 ${done} 個圖層 → ${zipName}` + (failed ? `（${failed} 個失敗）` : ''), done > 0 ? 'ok' : 'err');
+  } catch(err) {
+    toast('ZIP 打包失敗：' + err.message, 'err');
+  } finally {
+    updateLayerExportBtn(); // restores button state
+  }
 }
 
 // ══════════════════════════════════════════════════════════════════════════
