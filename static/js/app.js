@@ -451,42 +451,110 @@ function exportProject() {
   toast('專案已匯出', 'ok');
 }
 
+// ── Deep-copy a page with all-new IDs (avoids collisions on insert) ────────
+function remapPageIds(page) {
+  const idMap = {};
+  const newLayers = (page.layers || []).map(l => {
+    const nid = mkId(); idMap[l.id] = nid;
+    return { ...l, id: nid, grid: (l.grid || []).map(r => [...r]) };
+  });
+  return {
+    ...page,
+    id: mkPageId(),
+    layers: newLayers,
+    activeLayerId: idMap[page.activeLayerId] || newLayers[0]?.id,
+  };
+}
+
+// ── Pending import data (set before dialog shown) ────────────────────────
+let _pendingImport = null;
+
 function importProjectFile(file) {
   const r = new FileReader();
   r.onload = e => {
     try {
       const d = JSON.parse(e.target.result);
       if (d.pages && Array.isArray(d.pages) && d.pages.length) {
-        // ── Project format ──
-        projectName = d.name || '匯入專案';
-        const pnEl = document.getElementById('projectName');
-        if (pnEl) pnEl.value = projectName;
-        pages = d.pages.map(p => ({
-          ...p,
-          layers: (p.layers||[]).map(l=>({...l, grid:(l.grid||[]).map(r=>[...r])}))
-        }));
-        activePageId = null;
-        loadPage(d.activePageId || pages[0].id);
-        toast(`專案「${projectName}」已載入（${pages.length} 頁）`, 'ok');
+        // ── Multi-page project → show dialog ──
+        _pendingImport = d;
+        openImportDialog(d);
       } else if (d.width && d.height) {
-        // ── Single-page / legacy format ── append as new page
-        saveCurrentPage();
-        const bg = d.layers
-          ? d.layers.map(l=>({...l, id: mkId(), grid:(l.grid||[]).map(r=>[...r])}))
-          : [createLayer('背景','draw',0,0,d.width,d.height, (d.pixels||[]).map(r=>[...r]))];
-        const pg = { id: mkPageId(), name: d.name || '匯入頁面',
-          width: d.width, height: d.height,
-          layers: bg, activeLayerId: bg[0]?.id };
-        pages.push(pg);
-        activePageId = null;
-        loadPage(pg.id);
-        toast('頁面已匯入為新頁面', 'ok');
+        // ── Single-page / legacy → always insert (no dialog) ──
+        importSinglePage(d);
       } else {
         throw new Error('無法識別的格式');
       }
     } catch(err) { toast('匯入失敗：' + err.message, 'err'); }
   };
   r.readAsText(file);
+}
+
+function importSinglePage(d) {
+  saveCurrentPage();
+  const lys = d.layers
+    ? d.layers.map(l => ({ ...l, id: mkId(), grid: (l.grid||[]).map(r=>[...r]) }))
+    : [createLayer('背景','draw',0,0,d.width,d.height,(d.pixels||[]).map(r=>[...r]))];
+  const pg = { id: mkPageId(), name: d.name || '匯入頁面',
+    width: d.width, height: d.height, layers: lys, activeLayerId: lys[0]?.id };
+  pages.push(pg);
+  activePageId = null;
+  loadPage(pg.id);
+  toast('頁面已匯入為新頁面', 'ok');
+}
+
+// ── Import dialog ────────────────────────────────────────────────────────
+function openImportDialog(d) {
+  const dlg   = document.getElementById('importDialog');
+  const projN = d.name || '未命名專案';
+  const impCt = d.pages.length;
+  const curCt = pages.length;
+
+  document.getElementById('idProjName').textContent   = projN;
+  document.getElementById('idImpCount').textContent   = impCt;
+  document.getElementById('idImpCount2').textContent  = impCt;
+  document.getElementById('idCurCount').textContent   = curCt;
+  document.getElementById('idTotCount').textContent   = curCt + impCt;
+  document.getElementById('idReplCount').textContent  = impCt;
+  dlg.style.display = 'flex';
+  setTimeout(() => document.getElementById('idBtnInsert').focus(), 50);
+
+  // Option selection highlight
+  const optInsert  = document.getElementById('idOptInsert');
+  const optReplace = document.getElementById('idOptReplace');
+  const select = (ins) => {
+    optInsert.classList.toggle('selected', ins);
+    optReplace.classList.toggle('selected', !ins);
+  };
+  optInsert.onclick  = () => { select(true);  document.getElementById('idBtnInsert').focus(); };
+  optReplace.onclick = () => { select(false); document.getElementById('idBtnReplace').focus(); };
+}
+
+function closeImportDialog() {
+  document.getElementById('importDialog').style.display = 'none';
+  _pendingImport = null;
+}
+
+function doImportInsert() {
+  const d = _pendingImport; if (!d) return;
+  closeImportDialog();
+  saveCurrentPage();
+  const inserted = d.pages.map(remapPageIds);
+  pages.push(...inserted);
+  activePageId = null;
+  loadPage(inserted[0].id);
+  toast(`已插入 ${inserted.length} 個頁面到目前專案`, 'ok');
+}
+
+function doImportReplace() {
+  const d = _pendingImport; if (!d) return;
+  closeImportDialog();
+  projectName = d.name || '匯入專案';
+  const pnEl = document.getElementById('projectName');
+  if (pnEl) pnEl.value = projectName;
+  pages = d.pages.map(remapPageIds);
+  activePageId = null;
+  loadPage(pages[0].id);
+  toast(`已替換為「${projectName}」（${pages.length} 頁）`, 'ok');
 }
 
 // ══════════════════════════════════════════════════════════════════════════
@@ -1419,6 +1487,8 @@ function bindEvents(){
   document.getElementById('btnCloseModal').addEventListener('click',()=>document.getElementById('codeModal').style.display='none');
   document.getElementById('btnCopyCode').addEventListener('click',()=>navigator.clipboard.writeText(document.getElementById('codeOutput').textContent).then(()=>toast('已複製到剪貼簿','ok')));
   document.getElementById('codeModal').addEventListener('click',e=>{if(e.target.id==='codeModal')document.getElementById('codeModal').style.display='none';});
+  // Import dialog – backdrop click and Escape
+  document.getElementById('importDialog').addEventListener('click',e=>{if(e.target.id==='importDialog')closeImportDialog();});
 
   document.getElementById('presetSize').addEventListener('change',e=>{const v=e.target.value,custom=v==='custom';document.getElementById('customSizeRow').style.display=custom?'flex':'none';if(!custom){const[nw,nh]=v.split('x').map(Number);resizeCanvas(nw,nh);}});
   document.getElementById('applySize').addEventListener('click',()=>resizeCanvas(parseInt(document.getElementById('customWidth').value)||128,parseInt(document.getElementById('customHeight').value)||64));
@@ -1437,7 +1507,10 @@ function onKey(e){
   if(e.ctrlKey&&e.key==='z'){undo();return;}
   if(e.ctrlKey&&(e.key==='y'||e.key==='Y')){redo();return;}
   if(e.ctrlKey&&e.key==='d'){e.preventDefault();duplicateLayer(activeLayerId);return;}
-  if(e.key==='Escape'){cancelText();selectRect=null;render();return;}
+  if(e.key==='Escape'){
+    if(document.getElementById('importDialog').style.display!=='none'){closeImportDialog();return;}
+    cancelText();selectRect=null;render();return;
+  }
   if(e.key==='Enter'&&(textPreview||iconPreview)){textPreview?commitText():commitIcon();return;}
   if(e.key==='Delete'&&selectRect){clearSel();return;}
   const map={p:'pencil',e:'eraser',f:'fill',l:'line',r:'rect',c:'circle',t:'text',s:'select',m:'move'};

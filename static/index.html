@@ -498,6 +498,59 @@
   </div>
 
   <div id="toast" class="toast"></div>
+
+  <!-- ── Import project dialog ── -->
+  <div id="importDialog" class="modal" style="display:none" role="dialog" aria-modal="true">
+    <div class="import-dlg">
+
+      <div class="import-dlg-header">
+        <span class="material-icons import-dlg-icon">upload_file</span>
+        <span>載入專案</span>
+      </div>
+
+      <div class="import-dlg-body">
+        <p class="import-proj-name" id="idProjName"></p>
+        <p class="import-meta">包含 <strong id="idImpCount"></strong> 個頁面</p>
+      </div>
+
+      <!-- Option A: Insert (default) -->
+      <div class="import-option selected" id="idOptInsert">
+        <div class="import-opt-icon">
+          <span class="material-icons">playlist_add</span>
+        </div>
+        <div class="import-opt-info">
+          <div class="import-opt-title">插入頁面 <span class="import-opt-badge">預設</span></div>
+          <div class="import-opt-desc">
+            將匯入的 <strong id="idImpCount2"></strong> 個頁面加到目前專案末尾，
+            目前 <strong id="idCurCount"></strong> 頁 + 匯入 =
+            <strong id="idTotCount"></strong> 頁
+          </div>
+        </div>
+      </div>
+
+      <!-- Option B: Replace -->
+      <div class="import-option" id="idOptReplace">
+        <div class="import-opt-icon warn">
+          <span class="material-icons">find_replace</span>
+        </div>
+        <div class="import-opt-info">
+          <div class="import-opt-title">全部替換</div>
+          <div class="import-opt-desc">
+            清除現有所有頁面，僅保留匯入的
+            <strong id="idReplCount"></strong> 個頁面。<br>
+            <span class="import-opt-warn">⚠ 目前未儲存的內容將遺失</span>
+          </div>
+        </div>
+      </div>
+
+      <div class="import-dlg-footer">
+        <button class="btn-dlg-cancel" onclick="closeImportDialog()">取消</button>
+        <button class="btn-dlg-replace" id="idBtnReplace" onclick="doImportReplace()">全部替換</button>
+        <button class="btn-dlg-insert" id="idBtnInsert" onclick="doImportInsert()">插入頁面</button>
+      </div>
+    </div>
+  </div>
+
 </div>
 
 <script src="js/fonts.js"></script>
