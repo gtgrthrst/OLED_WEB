@@ -1,5 +1,8 @@
 # OLED Pixel Designer
 
+[![Build & Push Container Image](https://github.com/gtgrthrst/OLED_WEB/actions/workflows/container.yml/badge.svg)](https://github.com/gtgrthrst/OLED_WEB/actions/workflows/container.yml)
+[![Container Image](https://ghcr.io/badge/gtgrthrst/oled_web)](https://github.com/gtgrthrst/OLED_WEB/pkgs/container/oled_web)
+
 > 專為 **SSD1306 OLED 螢幕**設計的線上像素畫編輯器，使用 Go 構建，無需安裝任何套件。  
 > An online pixel-art editor built with Go, purpose-built for SSD1306 OLED displays.
 
@@ -88,7 +91,11 @@ go build -o oled_web .
 ### Podman 容器
 
 ```bash
-# 建置並啟動
+# 從 GitHub Container Registry 直接拉取（推薦）
+podman run -d -p 8090:8090 --name oled_web \
+  ghcr.io/gtgrthrst/oled_web:latest
+
+# 本地建置並啟動
 ./run.sh up
 
 # 或手動操作
@@ -98,6 +105,8 @@ podman run -d -p 8090:8090 --name oled_web oled_web:latest
 # podman-compose
 podman compose -f compose.yaml up -d
 ```
+
+> 映像由 **GitHub Actions** 自動建置，支援 `linux/amd64` 與 `linux/arm64`（Raspberry Pi）。
 
 ### Cloudflare Tunnel 公開分享
 

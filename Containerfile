@@ -21,6 +21,13 @@ RUN apk --no-cache add ca-certificates tzdata && \
 
 WORKDIR /app
 
+# OCI image labels
+LABEL org.opencontainers.image.title="OLED Pixel Designer" \
+      org.opencontainers.image.description="Online SSD1306 OLED pixel editor built with Go" \
+      org.opencontainers.image.url="https://github.com/gtgrthrst/OLED_WEB" \
+      org.opencontainers.image.source="https://github.com/gtgrthrst/OLED_WEB" \
+      org.opencontainers.image.licenses="MIT"
+
 # Copy binary and static assets
 COPY --from=builder /build/oled_web ./
 COPY static/ ./static/
