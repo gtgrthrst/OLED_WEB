@@ -1,0 +1,16 @@
+# Go binary
+oled_web
+oled_web.exe
+
+# Go build cache
+*.test
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Editor
+.vscode/
+.idea/
+*.swp
+*.swo

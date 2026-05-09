@@ -1,0 +1,472 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>OLED 像素設計器</title>
+<link rel="stylesheet" href="css/style.css">
+<link rel="stylesheet" href="https://fonts.googleapis.com/icon?family=Material+Icons">
+</head>
+<body>
+<div id="app">
+
+  <!-- ── Header ── -->
+  <header>
+    <div class="header-left">
+      <span class="logo">OLED</span>
+      <h1>像素設計器</h1>
+      <span class="subtitle">SSD1306 專用</span>
+    </div>
+    <div class="header-center">
+      <label>螢幕尺寸</label>
+      <select id="presetSize">
+        <option value="128x64">128×64（標準）</option>
+        <option value="128x32">128×32</option>
+        <option value="64x64">64×64</option>
+        <option value="64x32">64×32</option>
+        <option value="96x16">96×16</option>
+        <option value="32x32">32×32</option>
+        <option value="16x16">16×16</option>
+        <option value="8x8">8×8</option>
+        <option value="custom">自訂...</option>
+      </select>
+      <span id="customSizeRow" style="display:none;gap:4px;align-items:center">
+        <input type="number" id="customWidth" placeholder="寬" min="1" max="512" value="128">
+        <span>×</span>
+        <input type="number" id="customHeight" placeholder="高" min="1" max="512" value="64">
+        <button class="btn-header" id="applySize">套用</button>
+      </span>
+    </div>
+    <div class="header-right">
+      <div id="canvasInfo" class="hud">128×64</div>
+      <div id="pixelInfo" class="hud">-</div>
+      <div id="zoomInfo" class="hud">-</div>
+    </div>
+  </header>
+
+  <div class="workspace">
+
+    <!-- ══ Col 1: Toolbar ══ -->
+    <aside class="toolbar" id="toolbar">
+
+      <!-- Layer toggle -->
+      <button class="layer-toggle-btn" id="btnToggleLayers" title="圖層面板">
+        <span class="material-icons">layers</span>
+        <span>圖層</span>
+      </button>
+
+      <section class="tb-section">
+        <div class="tb-section-title">繪圖工具</div>
+        <div class="tb-grid2">
+          <button class="tool-btn active" data-tool="pencil" title="鉛筆 (P)">
+            <span class="tb-icon">✏</span><span class="tb-label">鉛筆</span>
+          </button>
+          <button class="tool-btn" data-tool="eraser" title="橡皮擦 (E)">
+            <span class="tb-icon">◻</span><span class="tb-label">橡皮</span>
+          </button>
+          <button class="tool-btn" data-tool="fill" title="填充 (F)">
+            <span class="tb-icon">⬡</span><span class="tb-label">填充</span>
+          </button>
+          <button class="tool-btn" data-tool="line" title="直線 (L)">
+            <span class="tb-icon">╱</span><span class="tb-label">直線</span>
+          </button>
+          <button class="tool-btn" data-tool="rect" title="矩形 (R)">
+            <span class="tb-icon">▭</span><span class="tb-label">矩形</span>
+          </button>
+          <button class="tool-btn" data-tool="rect_fill" title="實心矩形">
+            <span class="tb-icon">▬</span><span class="tb-label">實矩</span>
+          </button>
+          <button class="tool-btn" data-tool="circle" title="圓形 (C)">
+            <span class="tb-icon">○</span><span class="tb-label">圓形</span>
+          </button>
+          <button class="tool-btn" data-tool="circle_fill" title="實心圓形">
+            <span class="tb-icon">●</span><span class="tb-label">實圓</span>
+          </button>
+          <button class="tool-btn" data-tool="text" title="文字 (T)">
+            <span class="tb-icon tb-T">T</span><span class="tb-label">文字</span>
+          </button>
+          <button class="tool-btn" data-tool="select" title="選取 (S)">
+            <span class="tb-icon">⬚</span><span class="tb-label">選取</span>
+          </button>
+          <button class="tool-btn" data-tool="move" title="移動圖層 (M)" style="grid-column:1/-1">
+            <span class="tb-icon">✥</span><span class="tb-label">移動圖層</span>
+          </button>
+        </div>
+      </section>
+
+      <section class="tb-section" id="brushSection">
+        <div class="tb-section-title">筆刷大小</div>
+        <div class="brush-row">
+          <input type="range" id="brushSize" min="1" max="12" value="1" step="1">
+          <span id="brushSizeVal" class="brush-val">1</span>
+        </div>
+        <div class="brush-preview-row">
+          <canvas id="brushPreview" width="40" height="40"></canvas>
+        </div>
+      </section>
+
+      <section class="tb-section">
+        <div class="tb-section-title">畫筆顏色</div>
+        <div class="color-row">
+          <button class="color-btn active" data-color="1" title="白色（亮）">
+            <span class="color-swatch" style="background:#fff"></span><span>亮</span>
+          </button>
+          <button class="color-btn" data-color="0" title="黑色（暗）">
+            <span class="color-swatch" style="background:#000;border:1px solid #555"></span><span>暗</span>
+          </button>
+        </div>
+      </section>
+
+      <section class="tb-section">
+        <div class="tb-section-title">影像變換</div>
+        <div class="tb-grid4">
+          <button class="act-btn" id="btnFlipH" title="水平翻轉">↔</button>
+          <button class="act-btn" id="btnFlipV" title="垂直翻轉">↕</button>
+          <button class="act-btn" id="btnRotCW" title="順時針90°">↻</button>
+          <button class="act-btn" id="btnRotCCW" title="逆時針90°">↺</button>
+        </div>
+        <div class="tb-grid4">
+          <button class="act-btn" id="btnInvert" title="反色">⊘</button>
+          <button class="act-btn" id="btnShiftL" title="左移">←</button>
+          <button class="act-btn" id="btnShiftR" title="右移">→</button>
+          <button class="act-btn danger" id="btnClear" title="清除">🗑</button>
+        </div>
+        <div class="tb-grid4">
+          <button class="act-btn" id="btnShiftU" title="上移">↑</button>
+          <button class="act-btn" id="btnShiftD" title="下移">↓</button>
+          <button class="act-btn accent" id="btnFill" title="填滿">■</button>
+          <button class="act-btn" id="btnCenter" title="水平置中">⊟</button>
+        </div>
+      </section>
+
+      <section class="tb-section">
+        <div class="tb-section-title">編輯</div>
+        <div class="tb-grid2">
+          <button class="act-btn2" id="btnUndo" title="復原 Ctrl+Z">↩ 復原</button>
+          <button class="act-btn2" id="btnRedo" title="重做 Ctrl+Y">↪ 重做</button>
+        </div>
+      </section>
+
+      <section class="tb-section">
+        <div class="tb-section-title">檢視</div>
+        <div class="tb-grid2">
+          <button class="act-btn2" id="btnZoomIn" title="放大 (+)">＋ 放大</button>
+          <button class="act-btn2" id="btnZoomOut" title="縮小 (-)">－ 縮小</button>
+        </div>
+        <button class="act-btn-full" id="btnZoomFit">⊡ 適合視窗</button>
+        <label class="toggle-row"><input type="checkbox" id="chkGrid" checked><span>顯示網格</span></label>
+      </section>
+
+    </aside>
+
+    <!-- ══ Col 2: Layer sidebar (toggleable) ══ -->
+    <aside class="layer-sidebar" id="layerSidebar">
+      <div class="layer-sidebar-header">
+        <div class="layer-sidebar-title">
+          <span class="material-icons" style="font-size:14px">layers</span>
+          <span>圖層管理</span>
+          <span class="layer-count-badge" id="layerCountBadge">0 層</span>
+        </div>
+        <div class="layer-panel-actions">
+          <button class="layer-hdr-btn" id="btnAddLayer" title="新增圖層">
+            <span class="material-icons">add</span>
+          </button>
+          <button class="layer-hdr-btn" id="btnMergeDown" title="向下合併">
+            <span class="material-icons">merge</span>
+          </button>
+          <button class="layer-hdr-btn" id="btnFlattenLayers" title="合併所有">
+            <span class="material-icons">compress</span>
+          </button>
+        </div>
+      </div>
+      <div class="layer-list" id="layerList"></div>
+      <div class="layer-hint">雙擊名稱重新命名 · 拖曳排序 · M 鍵移動</div>
+    </aside>
+
+    <!-- ══ Col 3: Canvas ══ -->
+    <main class="canvas-area" id="canvasArea">
+      <div class="canvas-wrapper" id="canvasWrapper">
+        <canvas id="mainCanvas"></canvas>
+        <canvas id="overlayCanvas"></canvas>
+      </div>
+    </main>
+
+    <!-- ══ Col 4: Icons column ══ -->
+    <aside class="icons-col">
+
+      <!-- Text Tool Panel -->
+      <div class="side-panel" id="textPanel" style="display:none">
+        <div class="side-panel-title">文字工具</div>
+        <div class="form-row">
+          <label>文字內容（支援中文）</label>
+          <input type="text" id="textInput" placeholder="輸入後即時預覽..." lang="zh" autocomplete="off">
+          <span class="live-hint" id="liveHint" style="display:none">↑ 移動滑鼠到畫布定位</span>
+        </div>
+        <div class="form-row">
+          <label>字體模式</label>
+          <div class="seg-ctrl" id="fontMode">
+            <button class="seg-btn active" data-mode="canvas">系統字體</button>
+            <button class="seg-btn" data-mode="bitmap">點陣字體</button>
+          </div>
+        </div>
+        <div id="canvasFontOpts">
+          <div class="form-row">
+            <label>字體家族</label>
+            <select id="fontFamily">
+              <optgroup label="無襯線">
+                <option value="sans-serif">無襯線 Sans-serif</option>
+                <option value="Arial">Arial</option>
+                <option value="Helvetica">Helvetica</option>
+              </optgroup>
+              <optgroup label="襯線">
+                <option value="serif">Serif 襯線</option>
+                <option value="Georgia">Georgia</option>
+              </optgroup>
+              <optgroup label="等寬">
+                <option value="monospace">Monospace 等寬</option>
+                <option value="'Courier New'">Courier New</option>
+              </optgroup>
+              <optgroup label="中文">
+                <option value="'Microsoft JhengHei',sans-serif">微軟正黑體</option>
+                <option value="'Microsoft YaHei',sans-serif">微軟雅黑</option>
+                <option value="'PingFang TC',sans-serif">蘋方 PingFang</option>
+                <option value="'Noto Sans TC',sans-serif">Noto Sans TC</option>
+                <option value="'Source Han Sans TC',sans-serif">思源黑體</option>
+              </optgroup>
+              <optgroup label="已上傳" id="uploadedFontsGroup" style="display:none"></optgroup>
+            </select>
+          </div>
+          <div class="form-row">
+            <label>字體大小</label>
+            <div class="size-row">
+              <input type="range" id="fontSizeSlider" min="6" max="64" value="12" step="1">
+              <select id="fontSizePreset">
+                <option value="6">6px</option><option value="8">8px</option>
+                <option value="10">10px</option><option value="12" selected>12px</option>
+                <option value="14">14px</option><option value="16">16px</option>
+                <option value="18">18px</option><option value="20">20px</option>
+                <option value="24">24px</option><option value="28">28px</option>
+                <option value="32">32px</option><option value="36">36px</option>
+                <option value="40">40px</option><option value="48">48px</option>
+                <option value="56">56px</option><option value="64">64px</option>
+              </select>
+            </div>
+          </div>
+          <div class="form-row">
+            <label>樣式</label>
+            <div class="check-row">
+              <label class="chk-label"><input type="checkbox" id="chkBold"> 粗體</label>
+              <label class="chk-label"><input type="checkbox" id="chkItalic"> 斜體</label>
+            </div>
+          </div>
+          <div class="form-row">
+            <label>筆劃閾值 <span id="thresholdVal">20% · 均衡</span></label>
+            <input type="range" id="threshold" min="1" max="100" value="20">
+            <div class="thresh-hint">← 細節多（細字）　　粗體 →</div>
+          </div>
+          <button class="btn-upload" id="btnUploadFont">⬆ 上傳字體 TTF/OTF</button>
+          <input type="file" id="fontFileInput" accept=".ttf,.otf,.woff,.woff2" style="display:none">
+          <div id="uploadedFontsList" class="uploaded-list" style="display:none"></div>
+        </div>
+        <div id="bitmapFontOpts" style="display:none">
+          <div class="form-row">
+            <label>字型</label>
+            <select id="bitmapFont">
+              <optgroup label="ASCII 點陣">
+                <option value="5x7">5×7 標準</option>
+                <option value="5x7_bold">5×7 粗體</option>
+                <option value="3x5">3×5 迷你</option>
+                <option value="8x8">8×8 等寬</option>
+              </optgroup>
+              <optgroup label="中文點陣">
+                <option value="cjk_8">中文 8px</option>
+                <option value="cjk_12">中文 12px</option>
+                <option value="cjk_16">中文 16px（黑體）</option>
+                <option value="cjk_24">中文 24px</option>
+                <option value="cjk_16_song">中文 16px（宋體）</option>
+                <option value="cjk_16_mono">中文 16px（等寬）</option>
+              </optgroup>
+            </select>
+          </div>
+          <div class="form-row">
+            <label>字間距</label>
+            <input type="number" id="charSpacing" value="1" min="0" max="10">
+          </div>
+        </div>
+        <div class="text-actions">
+          <button class="btn-primary" id="btnPlaceText">放置文字</button>
+          <button class="btn-ghost" id="btnCancelText">取消</button>
+        </div>
+      </div>
+
+      <!-- Select Tool Panel -->
+      <div class="side-panel" id="selectPanel" style="display:none">
+        <div class="side-panel-title">選取操作</div>
+        <div class="sel-grid">
+          <button class="sel-btn" id="btnCopySel">複製</button>
+          <button class="sel-btn" id="btnCutSel">剪下</button>
+          <button class="sel-btn" id="btnClearSel">清除</button>
+          <button class="sel-btn" id="btnInvertSel">反色</button>
+          <button class="sel-btn" id="btnFlipHSel">水平翻轉</button>
+          <button class="sel-btn" id="btnFlipVSel">垂直翻轉</button>
+        </div>
+      </div>
+
+      <!-- Google Material Icons -->
+      <div class="side-panel icons-panel-inner">
+        <div class="icons-panel-title">
+          <div class="icons-title-left">
+            <span class="material-icons" style="font-size:14px">grid_view</span>
+            <span>Google Material Icons</span>
+          </div>
+          <span class="icon-count-badge" id="iconCountBadge"></span>
+        </div>
+        <div class="icon-top-row">
+          <div class="icon-search-wrap">
+            <span class="material-icons icon-search-ic">search</span>
+            <input type="text" id="iconSearch" placeholder="搜尋圖示..." autocomplete="off" spellcheck="false">
+            <button class="icon-search-clear" id="btnClearSearch" style="display:none">✕</button>
+          </div>
+          <select id="iconSize" title="插入尺寸">
+            <option value="8">8px</option>
+            <option value="12">12px</option>
+            <option value="16" selected>16px</option>
+            <option value="24">24px</option>
+            <option value="32">32px</option>
+          </select>
+        </div>
+        <div class="icon-cat-tabs" id="iconCatTabs"></div>
+        <div class="icon-grid" id="iconGrid"></div>
+        <div class="icon-load-hint" id="iconLoadHint" style="display:none">
+          <span class="material-icons spinning">autorenew</span> 渲染中...
+        </div>
+      </div>
+
+    </aside>
+
+    <!-- ══ Col 5: Import / Export column ══ -->
+    <aside class="tools-col">
+
+      <!-- Image Import -->
+      <div class="side-panel">
+        <div class="side-panel-title">
+          <span class="material-icons" style="font-size:14px">image</span> 匯入圖片
+        </div>
+        <button class="btn-upload" id="btnImportImg">🖼 選擇圖片（PNG / JPG）</button>
+        <input type="file" id="imgFileInput" accept="image/*" style="display:none">
+        <div id="imgImportOpts" style="display:none">
+          <div class="crop-header">
+            <span class="crop-label">拖曳選取範圍</span>
+            <button class="btn-tiny" id="btnResetCrop">↺ 全圖</button>
+          </div>
+          <div class="img-crop-wrap">
+            <canvas id="imgCropCanvas"></canvas>
+          </div>
+          <div class="img-crop-info" id="imgCropInfo">—</div>
+          <div class="form-row" style="margin-top:6px">
+            <label>縮放模式</label>
+            <select id="imgScaleMode">
+              <option value="fit">等比縮放（留白）</option>
+              <option value="fill">等比裁切（填滿）</option>
+              <option value="stretch">拉伸填滿</option>
+            </select>
+          </div>
+          <div class="form-row">
+            <label>黑白閾值 <span id="imgThreshVal">128</span></label>
+            <input type="range" id="imgThreshold" min="1" max="254" value="128">
+          </div>
+          <div class="form-row">
+            <label>抖色演算</label>
+            <select id="imgDither">
+              <option value="none">無</option>
+              <option value="floyd">Floyd-Steinberg</option>
+              <option value="ordered">Bayer 有序抖色</option>
+            </select>
+          </div>
+          <div class="result-label">結果預覽</div>
+          <div class="img-preview-wrap">
+            <canvas id="imgPreviewCanvas"></canvas>
+          </div>
+          <div class="img-import-actions">
+            <button class="btn-primary" id="btnApplyImg">匯入為新圖層</button>
+            <button class="btn-ghost" id="btnCancelImg">取消</button>
+          </div>
+        </div>
+      </div>
+
+      <!-- Export -->
+      <div class="side-panel">
+        <div class="side-panel-title">
+          <span class="material-icons" style="font-size:14px">code</span> 匯出程式碼
+        </div>
+        <div class="form-row">
+          <label>圖像名稱</label>
+          <input type="text" id="exportName" value="my_image">
+        </div>
+        <div class="export-grid">
+          <button class="btn-export" data-format="micropython">
+            <span class="exp-icon">🐍</span>
+            <span class="exp-name">MicroPython</span>
+            <span class="exp-desc">完整 SSD1306</span>
+          </button>
+          <button class="btn-export" data-format="framebuf">
+            <span class="exp-icon">🗂</span>
+            <span class="exp-name">Framebuf</span>
+            <span class="exp-desc">逐行 bitmap</span>
+          </button>
+          <button class="btn-export" data-format="c_array">
+            <span class="exp-icon">⚡</span>
+            <span class="exp-name">C / Arduino</span>
+            <span class="exp-desc">Adafruit 格式</span>
+          </button>
+          <button class="btn-export" data-format="json">
+            <span class="exp-icon">💾</span>
+            <span class="exp-name">JSON</span>
+            <span class="exp-desc">含圖層儲存</span>
+          </button>
+        </div>
+        <button class="btn-ghost" id="btnLoadJson">📂 載入 JSON</button>
+        <input type="file" id="fileInput" accept=".json" style="display:none">
+      </div>
+
+      <!-- OLED Preview -->
+      <div class="side-panel">
+        <div class="side-panel-title">
+          <span class="material-icons" style="font-size:14px">monitor</span> OLED 預覽
+        </div>
+        <div class="oled-frame"><canvas id="previewCanvas"></canvas></div>
+        <div class="preview-info" id="previewInfo">128×64 px</div>
+      </div>
+
+      <!-- Stats -->
+      <div class="side-panel stats-panel">
+        <div class="stat-row"><span>亮點</span><span id="pixelCount">0 / 0</span></div>
+        <div class="stat-row"><span>佔比</span><span id="pixelRatio">0%</span></div>
+      </div>
+
+    </aside>
+  </div>
+
+  <!-- ── Code Modal ── -->
+  <div id="codeModal" class="modal" style="display:none">
+    <div class="modal-content">
+      <div class="modal-header">
+        <span id="modalTitle">匯出程式碼</span>
+        <div class="modal-actions">
+          <button id="btnCopyCode" class="btn-modal-copy">複製</button>
+          <button id="btnDownloadCode" class="btn-modal-dl">下載</button>
+          <button id="btnCloseModal" class="btn-modal-close">✕</button>
+        </div>
+      </div>
+      <pre id="codeOutput"></pre>
+    </div>
+  </div>
+
+  <div id="toast" class="toast"></div>
+</div>
+
+<script src="js/fonts.js"></script>
+<script src="js/icons.js"></script>
+<script src="js/app.js"></script>
+</body>
+</html>
