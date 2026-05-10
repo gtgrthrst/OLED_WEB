@@ -1090,7 +1090,6 @@ function shift(dx,dy){
 }
 function centerH(){
   const l=getActiveLayer();if(!l)return;saveUndo();
-  // Find content extents in canvas coords
   let mn=W,mx=-1;
   for(let gy=0;gy<l.h;gy++)for(let gx=0;gx<l.w;gx++)
     if(l.grid[gy]?.[gx]){const rx=l.x+gx;mn=Math.min(mn,rx);mx=Math.max(mx,rx);}
@@ -1098,6 +1097,12 @@ function centerH(){
   l.x+=Math.round((W-(mx-mn+1))/2)-mn;
   render();renderPreview();
 }
+function alignLeft()  {const l=getActiveLayer();if(!l)return;saveUndo();l.x=0;render();renderPreview();}
+function alignRight() {const l=getActiveLayer();if(!l)return;saveUndo();l.x=W-l.w;render();renderPreview();}
+function alignTop()   {const l=getActiveLayer();if(!l)return;saveUndo();l.y=0;render();renderPreview();}
+function alignBottom(){const l=getActiveLayer();if(!l)return;saveUndo();l.y=H-l.h;render();renderPreview();}
+function centerLayerH(){const l=getActiveLayer();if(!l)return;saveUndo();l.x=Math.round((W-l.w)/2);render();renderPreview();}
+function centerLayerV(){const l=getActiveLayer();if(!l)return;saveUndo();l.y=Math.round((H-l.h)/2);render();renderPreview();}
 
 // ══════════════════════════════════════════════════════════════════════════
 // Text rendering  (supersampling + relative threshold)
@@ -1883,8 +1888,19 @@ function bindEvents(){
   document.getElementById('btnShiftU').addEventListener('click',()=>shift(0,-1));
   document.getElementById('btnShiftD').addEventListener('click',()=>shift(0,1));
   document.getElementById('btnCenter').addEventListener('click',centerH);
-  document.getElementById('btnScaleLayer').addEventListener('click',()=>scaleLayer(parseInt(document.getElementById('scalePercent').value)||200));
-  document.getElementById('btnRotAngle').addEventListener('click',()=>rotateLayer(parseInt(document.getElementById('rotAngle').value)||45));
+  document.getElementById('btnAlignL').addEventListener('click',alignLeft);
+  document.getElementById('btnAlignR').addEventListener('click',alignRight);
+  document.getElementById('btnAlignT').addEventListener('click',alignTop);
+  document.getElementById('btnAlignB').addEventListener('click',alignBottom);
+  document.getElementById('btnAlignCH').addEventListener('click',centerLayerH);
+  document.getElementById('btnAlignCV').addEventListener('click',centerLayerV);
+  // Scale / rotate: apply on change (Enter, blur, or spinner) with debounce
+  let _xfTimer=null;
+  function _debounced(fn,ms=180){clearTimeout(_xfTimer);_xfTimer=setTimeout(fn,ms);}
+  document.getElementById('scalePercent').addEventListener('change',()=>scaleLayer(parseInt(document.getElementById('scalePercent').value)||100));
+  document.getElementById('scalePercent').addEventListener('input',()=>_debounced(()=>scaleLayer(parseInt(document.getElementById('scalePercent').value)||100)));
+  document.getElementById('rotAngle').addEventListener('change',()=>rotateLayer(parseInt(document.getElementById('rotAngle').value)||0));
+  document.getElementById('rotAngle').addEventListener('input',()=>_debounced(()=>rotateLayer(parseInt(document.getElementById('rotAngle').value)||0)));
   document.getElementById('btnUndo').addEventListener('click',undo);
   document.getElementById('btnRedo').addEventListener('click',redo);
   document.getElementById('btnClear').addEventListener('click',()=>{saveUndo();const l=getActiveLayer();if(l){l.grid=Array.from({length:l.h},()=>new Array(l.w).fill(0));}render();renderPreview();updateInfo();toast('圖層已清除');});

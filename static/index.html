@@ -152,26 +152,36 @@
           <button class="act-btn" id="btnRotCCW" title="逆時針90°">↺</button>
         </div>
         <div class="tb-grid4">
-          <button class="act-btn" id="btnInvert" title="反色">⊘</button>
+          <button class="act-btn" id="btnShiftU" title="上移">↑</button>
           <button class="act-btn" id="btnShiftL" title="左移">←</button>
           <button class="act-btn" id="btnShiftR" title="右移">→</button>
           <button class="act-btn danger" id="btnClear" title="清除">🗑</button>
         </div>
         <div class="tb-grid4">
-          <button class="act-btn" id="btnShiftU" title="上移">↑</button>
+          <button class="act-btn" id="btnInvert" title="反色">⊘</button>
           <button class="act-btn" id="btnShiftD" title="下移">↓</button>
           <button class="act-btn accent" id="btnFill" title="填滿">■</button>
-          <button class="act-btn" id="btnCenter" title="水平置中">⊟</button>
+          <button class="act-btn" id="btnCenter" title="水平置中（依內容）">⊟</button>
+        </div>
+        <div class="tb-grid3">
+          <button class="act-btn" id="btnAlignL" title="靠左">|←</button>
+          <button class="act-btn" id="btnAlignCH" title="水平置中">⊟↔</button>
+          <button class="act-btn" id="btnAlignR" title="靠右">→|</button>
+        </div>
+        <div class="tb-grid3">
+          <button class="act-btn" id="btnAlignT" title="靠上">↑—</button>
+          <button class="act-btn" id="btnAlignCV" title="垂直置中">⊟↕</button>
+          <button class="act-btn" id="btnAlignB" title="靠下">—↓</button>
         </div>
         <div class="tb-transform-row">
-          <input type="number" id="scalePercent" class="tb-num-input" value="200" min="10" max="800" step="10" title="縮放百分比">
+          <span class="tb-label">縮放</span>
+          <input type="number" id="scalePercent" class="tb-num-input" value="100" min="10" max="800" step="10" title="縮放百分比，調整後自動套用">
           <span class="tb-unit">%</span>
-          <button class="act-btn" id="btnScaleLayer" title="縮放圖層內容（最近傍）">⤡ 縮放</button>
         </div>
         <div class="tb-transform-row">
-          <input type="number" id="rotAngle" class="tb-num-input" value="45" min="-360" max="360" step="1" title="旋轉角度（正數＝順時針）">
+          <span class="tb-label">旋轉</span>
+          <input type="number" id="rotAngle" class="tb-num-input" value="0" min="-360" max="360" step="1" title="旋轉角度（正數順時針），調整後自動套用">
           <span class="tb-unit">°</span>
-          <button class="act-btn" id="btnRotAngle" title="任意角度旋轉">↻ 旋轉</button>
         </div>
       </section>
 
