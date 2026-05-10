@@ -1408,28 +1408,42 @@ function buildIconPanel(){
   tabsEl.querySelector('.icon-cat-btn')?.classList.add('active');showIconList(MATERIAL_ICON_CATS[iconCat]);
   document.getElementById('iconCountBadge').textContent=Object.values(MATERIAL_ICON_CATS).flat().length+' 個圖示';
 }
+function _scaleGrid(grid, scale) {
+  if (scale <= 1) return grid;
+  const out = [];
+  for (const row of grid) {
+    const newRow = [];
+    for (const px of row) for (let s = 0; s < scale; s++) newRow.push(px);
+    for (let s = 0; s < scale; s++) out.push([...newRow]);
+  }
+  return out;
+}
 function showIconList(names){
   const gridEl=document.getElementById('iconGrid');gridEl.innerHTML='';
   if(!names?.length){gridEl.innerHTML='<div class="icon-no-result">無符合結果</div>';return;}
   const size=parseInt(document.getElementById('iconSize').value)||16;
+  const scale=parseInt(document.getElementById('iconScale').value)||1;
   const frag=document.createDocumentFragment();
   names.forEach(name=>{
     const cell=document.createElement('div');cell.className='icon-cell';cell.title=name.replace(/_/g,' ');
     const ic=document.createElement('span');ic.className='material-icons mi-cell-icon';ic.textContent=name;
     const lbl=document.createElement('span');lbl.className='icon-cell-label';lbl.textContent=name.replace(/_/g,' ');
     cell.appendChild(ic);cell.appendChild(lbl);
-    cell.addEventListener('click',()=>startIconPlacement(name,size));
+    cell.addEventListener('click',()=>startIconPlacement(name,size,scale));
     frag.appendChild(cell);
   });
   gridEl.appendChild(frag);
 }
-async function startIconPlacement(name,size){
+async function startIconPlacement(name,size,scale){
+  scale=scale||1;
   document.getElementById('iconLoadHint').style.display='flex';
   try{
     const result=await materialIconToGrid(name,size);
     if(!result.valid){toast(`「${name}」在此尺寸無法渲染`,'err');return;}
-    iconPreview={grid:result.grid,x:lastMouseX,y:lastMouseY};textPreview=null;render();
-    toast(`${name.replace(/_/g,' ')} · ${size}px · 點擊或 Enter 放置`);
+    const grid=_scaleGrid(result.grid,scale);
+    iconPreview={grid,x:lastMouseX,y:lastMouseY};textPreview=null;render();
+    const scaleLabel=scale>1?` · ${scale}×`:'';
+    toast(`${name.replace(/_/g,' ')} · ${size}px${scaleLabel} · 點擊或 Enter 放置`);
   }catch(e){toast('圖示渲染失敗：'+e.message,'err');}
   finally{document.getElementById('iconLoadHint').style.display='none';}
 }
@@ -1888,6 +1902,7 @@ function bindEvents(){
 
   const iconSearchEl=document.getElementById('iconSearch'),clearSearchEl=document.getElementById('btnClearSearch');
   document.getElementById('iconSize').addEventListener('change',()=>showIconList(_currentSearchResults||MATERIAL_ICON_CATS[iconCat]));
+  document.getElementById('iconScale').addEventListener('change',()=>showIconList(_currentSearchResults||MATERIAL_ICON_CATS[iconCat]));
   iconSearchEl.addEventListener('input',()=>{const q=iconSearchEl.value.trim();clearSearchEl.style.display=q?'':'none';if(!q){_currentSearchResults=null;document.querySelectorAll('.icon-cat-btn').forEach(b=>b.classList.toggle('active',b.dataset.cat===iconCat));showIconList(MATERIAL_ICON_CATS[iconCat]);}else{_currentSearchResults=searchIcons(q);document.querySelectorAll('.icon-cat-btn').forEach(b=>b.classList.remove('active'));showIconList(_currentSearchResults);}});
   clearSearchEl.addEventListener('click',()=>{iconSearchEl.value='';clearSearchEl.style.display='none';_currentSearchResults=null;document.querySelectorAll('.icon-cat-btn').forEach(b=>b.classList.toggle('active',b.dataset.cat===iconCat));showIconList(MATERIAL_ICON_CATS[iconCat]);});
 
