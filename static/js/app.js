@@ -1192,11 +1192,6 @@ function renderTextCanvas(text, family, size, bold, italic, threshPct) {
 
 // ── CJK bitmap (supersampled, relative threshold, cached raw grayscale) ───
 const CJK_FONTS = {
-  // ── Cubic-11 pixel font (OFL) – SCALE=1 + Otsu for clean output ──────────
-  cubic11_8:  {size:8,  family:'Cubic-11'},
-  cubic11_11: {size:11, family:'Cubic-11'},
-  cubic11_16: {size:16, family:'Cubic-11'},
-  cubic11_24: {size:24, family:'Cubic-11'},
   // ── System CJK fonts (supersampled) ──────────────────────────────────────
   cjk_8:      {size:8,  family:"'Microsoft JhengHei','PingFang TC','Noto Sans TC',sans-serif"},
   cjk_12:     {size:12, family:"'Microsoft JhengHei','PingFang TC','Noto Sans TC',sans-serif"},
@@ -1352,7 +1347,7 @@ function buildTextGrid(){
   if (fk.startsWith('cubic11_')) {
     const size = parseInt(fk.replace('cubic11_','')) || 11;
     if (typeof cubic11Text === 'function') return cubic11Text(txt, size, sp);
-    // fallback: canvas path if js not yet loaded
+    return null;  // cubic11.js not yet loaded – caller will retry
   }
 
   return CJK_FONTS[fk] ? renderCJKText(txt,fk,sp,threshPct) : renderText(txt,fk,sp,fk.includes('bold'));
