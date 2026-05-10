@@ -27,7 +27,7 @@ let tool = 'pencil';
 let drawColor = 1;
 let brushSize = 1;
 let showGrid = true;
-let fontMode = 'canvas';
+let fontMode = 'bitmap';  // default: bitmap mode (Cubic-11)
 
 // ── Drawing state ─────────────────────────────────────────────────────────
 let isDrawing = false;
@@ -787,6 +787,8 @@ function init() {
   const pnEl = document.getElementById('projectName');
   if (pnEl) pnEl.value = projectName;
   syncThresholdLabel();
+  // Apply default fontMode (bitmap) panel visibility
+  setFontMode(fontMode);
   loadCodepoints(); _ensureFont();
   loadPresetFonts();
 }
@@ -1188,6 +1190,12 @@ function renderTextCanvas(text, family, size, bold, italic, threshPct) {
 
 // ── CJK bitmap (supersampled, relative threshold, cached raw grayscale) ───
 const CJK_FONTS = {
+  // ── Cubic-11 pixel font (OFL) – SCALE=1 + Otsu for clean output ──────────
+  cubic11_8:  {size:8,  family:'Cubic-11'},
+  cubic11_11: {size:11, family:'Cubic-11'},
+  cubic11_16: {size:16, family:'Cubic-11'},
+  cubic11_24: {size:24, family:'Cubic-11'},
+  // ── System CJK fonts (supersampled) ──────────────────────────────────────
   cjk_8:      {size:8,  family:"'Microsoft JhengHei','PingFang TC','Noto Sans TC',sans-serif"},
   cjk_12:     {size:12, family:"'Microsoft JhengHei','PingFang TC','Noto Sans TC',sans-serif"},
   cjk_16:     {size:16, family:"'Microsoft JhengHei','PingFang TC','Noto Sans TC',sans-serif"},

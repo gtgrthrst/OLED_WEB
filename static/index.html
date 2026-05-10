@@ -237,17 +237,14 @@
         <div class="form-row">
           <label>字體模式</label>
           <div class="seg-ctrl" id="fontMode">
-            <button class="seg-btn active" data-mode="canvas">系統字體</button>
-            <button class="seg-btn" data-mode="bitmap">點陣字體</button>
+            <button class="seg-btn" data-mode="canvas">系統字體</button>
+            <button class="seg-btn active" data-mode="bitmap">點陣字體</button>
           </div>
         </div>
         <div id="canvasFontOpts">
           <div class="form-row">
             <label>字體家族</label>
             <select id="fontFamily">
-              <optgroup label="像素字體（推薦）">
-                <option value="Cubic-11">Cubic-11（方塊像素，支援中文）</option>
-              </optgroup>
               <optgroup label="無襯線">
                 <option value="sans-serif">無襯線 Sans-serif</option>
                 <option value="Arial">Arial</option>
@@ -309,17 +306,23 @@
           <div class="form-row">
             <label>字型</label>
             <select id="bitmapFont">
+              <optgroup label="Cubic-11（推薦，OFL，支援中文）">
+                <option value="cubic11_8">Cubic-11  8px</option>
+                <option value="cubic11_11" selected>Cubic-11 11px（原生最佳）</option>
+                <option value="cubic11_16">Cubic-11 16px</option>
+                <option value="cubic11_24">Cubic-11 24px</option>
+              </optgroup>
               <optgroup label="ASCII 點陣">
                 <option value="5x7">5×7 標準</option>
                 <option value="5x7_bold">5×7 粗體</option>
                 <option value="3x5">3×5 迷你</option>
                 <option value="8x8">8×8 等寬</option>
               </optgroup>
-              <optgroup label="中文點陣">
-                <option value="cjk_8">中文 8px</option>
-                <option value="cjk_12">中文 12px</option>
+              <optgroup label="系統中文點陣">
+                <option value="cjk_8">中文 8px（黑體）</option>
+                <option value="cjk_12">中文 12px（黑體）</option>
                 <option value="cjk_16">中文 16px（黑體）</option>
-                <option value="cjk_24">中文 24px</option>
+                <option value="cjk_24">中文 24px（黑體）</option>
                 <option value="cjk_16_song">中文 16px（宋體）</option>
                 <option value="cjk_16_mono">中文 16px（等寬）</option>
               </optgroup>
