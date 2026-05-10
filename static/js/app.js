@@ -966,8 +966,8 @@ function saveUndo() {
   if (undoStack.length>MAX_UNDO) undoStack.shift();
   redoStack=[];
 }
-function undo() { if(!undoStack.length)return; redoStack.push(snapState()); applyState(undoStack.pop()); }
-function redo() { if(!redoStack.length)return; undoStack.push(snapState()); applyState(redoStack.pop()); }
+function undo() { if(!undoStack.length)return; clearXfSrc(true); redoStack.push(snapState()); applyState(undoStack.pop()); }
+function redo() { if(!redoStack.length)return; clearXfSrc(true); undoStack.push(snapState()); applyState(redoStack.pop()); }
 
 // ══════════════════════════════════════════════════════════════════════════
 // Drawing primitives (operate in canvas coords, write to active layer)
@@ -1037,34 +1037,59 @@ function rotCW(){
   else render();renderPreview();
 }
 function rotCCW(){rotCW();rotCW();rotCW();}
+
+// ── Transform origin cache ─────────────────────────────────────────────────
+// Stores the pre-transform snapshot per operation type so repeated adjustments
+// always apply to the original, preventing cascaded quality loss.
+let _xfSrc = {scale: null, rot: null};
+function _ensureXfSrc(type) {
+  const l = getActiveLayer(); if (!l) return null;
+  if (!_xfSrc[type] || _xfSrc[type].layer !== l) {
+    saveUndo();
+    _xfSrc[type] = {layer: l, grid: l.grid.map(r=>[...r]), w: l.w, h: l.h};
+  }
+  return _xfSrc[type];
+}
+function clearXfSrc(resetInputs) {
+  _xfSrc = {scale: null, rot: null};
+  if (resetInputs) {
+    const si=document.getElementById('scalePercent'), ri=document.getElementById('rotAngle');
+    if (si) si.value='100';
+    if (ri) ri.value='0';
+  }
+}
+
 function scaleLayer(pct){
-  const l=getActiveLayer();if(!l)return;
+  if(pct===100 && !_xfSrc.scale)return;  // identity no-op before any transform
+  const src=_ensureXfSrc('scale');if(!src)return;
+  const l=src.layer;
   const factor=Math.max(0.1,pct/100);
-  const nw=Math.max(1,Math.round(l.w*factor));
-  const nh=Math.max(1,Math.round(l.h*factor));
-  saveUndo();
+  const nw=Math.max(1,Math.round(src.w*factor));
+  const nh=Math.max(1,Math.round(src.h*factor));
   l.grid=Array.from({length:nh},(_,ny)=>{
-    const oy=Math.floor(ny*l.h/nh);
+    const oy=Math.floor(ny*src.h/nh);
     return Array.from({length:nw},(_,nx)=>{
-      const ox=Math.floor(nx*l.w/nw);
-      return l.grid[oy]?.[ox]??0;
+      const ox=Math.floor(nx*src.w/nw);
+      return src.grid[oy]?.[ox]??0;
     });
   });
   l.w=nw;l.h=nh;render();renderPreview();updateInfo();
   toast(`縮放至 ${nw}×${nh}`,'ok');
 }
 function rotateLayer(deg){
-  const l=getActiveLayer();if(!l)return;
+  if(deg===0 && !_xfSrc.rot)return;      // identity no-op before any transform
+  const src=_ensureXfSrc('rot');if(!src)return;
+  const l=src.layer;
   const rad=deg*Math.PI/180;
   const cosA=Math.abs(Math.cos(rad)),sinA=Math.abs(Math.sin(rad));
-  const nw=Math.ceil(l.w*cosA+l.h*sinA);
-  const nh=Math.ceil(l.w*sinA+l.h*cosA);
+  const nw=Math.ceil(src.w*cosA+src.h*sinA);
+  const nh=Math.ceil(src.w*sinA+src.h*cosA);
   // Draw source grid onto off-screen canvas
-  const src=document.createElement('canvas');src.width=l.w;src.height=l.h;
-  const sc=src.getContext('2d');
-  const id=sc.createImageData(l.w,l.h);
-  for(let y=0;y<l.h;y++)for(let x=0;x<l.w;x++){
-    const i=(y*l.w+x)*4,v=l.grid[y]?.[x]?255:0;
+  const cv=document.createElement('canvas');cv.width=src.w;cv.height=src.h;
+  const sc=cv.getContext('2d');
+  const id=sc.createImageData(src.w,src.h);
+  for(let y=0;y<src.h;y++)for(let x=0;x<src.w;x++){
+    const i=(y*src.w+x)*4,v=src.grid[y]?.[x]?255:0;
     id.data[i]=id.data[i+1]=id.data[i+2]=v;id.data[i+3]=255;
   }
   sc.putImageData(id,0,0);
@@ -1073,13 +1098,12 @@ function rotateLayer(deg){
   const dc=dst.getContext('2d');
   dc.fillStyle='#000';dc.fillRect(0,0,nw,nh);
   dc.save();dc.translate(nw/2,nh/2);dc.rotate(rad);
-  dc.drawImage(src,-l.w/2,-l.h/2);dc.restore();
+  dc.drawImage(cv,-src.w/2,-src.h/2);dc.restore();
   // Threshold to binary (adaptive: 30% of max brightness)
   const out=dc.getImageData(0,0,nw,nh).data;
   let maxV=0;
   for(let i=0;i<out.length;i+=4)if(out[i]>maxV)maxV=out[i];
   const thresh=Math.max(16,maxV*0.3);
-  saveUndo();
   l.grid=Array.from({length:nh},(_,y)=>Array.from({length:nw},(_,x)=>out[(y*nw+x)*4]>thresh?1:0));
   l.w=nw;l.h=nh;render();renderPreview();updateInfo();
   toast(`旋轉 ${deg}°`,'ok');
@@ -1647,7 +1671,7 @@ function refreshLayerPanel(){
     row.appendChild(visBtn);row.appendChild(thumb);row.appendChild(info);row.appendChild(btns);
 
     // Select layer on click
-    row.addEventListener('click',()=>{activeLayerId=layer.id;refreshLayerPanel();render();});
+    row.addEventListener('click',()=>{activeLayerId=layer.id;clearXfSrc(true);refreshLayerPanel();render();});
 
     // Drag to reorder
     row.addEventListener('dragstart',e=>{panelDragId=layer.id;row.classList.add('dragging');e.dataTransfer.effectAllowed='move';e.dataTransfer.setData('text/plain',layer.id);});
