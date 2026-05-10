@@ -1050,9 +1050,19 @@ function centerH(){
 // Text rendering  (supersampling + relative threshold)
 // ══════════════════════════════════════════════════════════════════════════
 
-// Supersampling scale for a given target pixel size
-// Smaller targets need more oversampling to preserve strokes
-function ssScale(size) {
+// Pixel fonts: designed on a pixel grid → render at 1× (no supersampling).
+// Supersampling makes things *worse* for pixel fonts because adjacent 1px strokes
+// blur into each other when the over-sized render is resampled back down.
+const PIXEL_FONT_KEYS = ['Cubic-11', 'Cubic_11', 'Press Start 2P', 'Pixel', 'PixelFont'];
+function isPixelFont(family) {
+  if (!family) return false;
+  const f = family.toLowerCase();
+  return PIXEL_FONT_KEYS.some(k => f.includes(k.toLowerCase()));
+}
+
+// Supersampling scale: SCALE=1 for pixel fonts, higher for anti-aliased fonts
+function ssScale(size, family = '') {
+  if (isPixelFont(family)) return 1;   // pixel font: render at native size
   if (size <= 8)  return 8;
   if (size <= 12) return 6;
   if (size <= 20) return 4;
@@ -1084,7 +1094,7 @@ function applyRelThreshold(data, w, h, threshPct) {
  */
 function renderTextCanvas(text, family, size, bold, italic, threshPct) {
   if (!text) return null;
-  const SCALE   = ssScale(size);
+  const SCALE   = ssScale(size, family);
   const bSize   = size * SCALE;
   const fontStr = `${italic?'italic':''} ${bold?'bold':''} ${bSize}px ${family}`.trim();
 
@@ -1114,17 +1124,22 @@ function renderTextCanvas(text, family, size, bold, italic, threshPct) {
   hx.fillStyle = '#fff'; hx.font = fontStr; hx.textBaseline = 'top';
   hx.fillText(text, textX, textY);
 
-  // Downsample to target size
+  // Downsample (or 1:1 copy for pixel fonts with SCALE=1)
   const tw = Math.max(Math.ceil(bW / SCALE), 1);
   const th = Math.max(Math.ceil(bH / SCALE), 1);
   const lc = document.createElement('canvas');
   lc.width = tw; lc.height = th;
   const lx = lc.getContext('2d');
-  lx.imageSmoothingEnabled = true;
-  lx.imageSmoothingQuality = 'high';
+  // Pixel fonts at SCALE=1: keep pixels crisp, no smoothing
+  lx.imageSmoothingEnabled = SCALE > 1;
+  if (SCALE > 1) lx.imageSmoothingQuality = 'high';
   lx.drawImage(hc, 0, 0, tw, th);
 
-  const grid = applyRelThreshold(lx.getImageData(0, 0, tw, th).data, tw, th, threshPct);
+  // Pixel fonts at native size render near-binary pixels (0 or 255).
+  // Use a fixed low threshold (16/255 ≈ 6%) to catch any lit pixel without
+  // the relative-threshold logic that can behave unpredictably at SCALE=1.
+  const effectiveThreshPct = SCALE === 1 ? 6 : threshPct;
+  const grid = applyRelThreshold(lx.getImageData(0, 0, tw, th).data, tw, th, effectiveThreshPct);
   if (!grid) return null;
   return trimGrid(grid);
 }
@@ -1146,7 +1161,7 @@ function getCJKRaw(ch, size, family) {
   const key = `${ch}:${size}:${family}`;
   if (cjkRawCache.has(key)) return cjkRawCache.get(key);
 
-  const SCALE = ssScale(size);
+  const SCALE = ssScale(size, family);
   const bSize = size * SCALE;
 
   // Measure first to detect ascent (same clipping issue as renderTextCanvas)
@@ -1176,7 +1191,8 @@ function getCJKRaw(ch, size, family) {
   const lc = document.createElement('canvas');
   lc.width = lw; lc.height = lh;
   const lx = lc.getContext('2d');
-  lx.imageSmoothingEnabled = true; lx.imageSmoothingQuality = 'high';
+  lx.imageSmoothingEnabled = SCALE > 1;
+  if (SCALE > 1) lx.imageSmoothingQuality = 'high';
   lx.drawImage(tc, 0, 0, bw, srcH, 0, 0, lw, lh);
 
   const imgData = lx.getImageData(0, 0, lw, lh).data;
