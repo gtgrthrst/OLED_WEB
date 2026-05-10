@@ -1214,7 +1214,7 @@ function buildTextGrid(){
   const threshPct = Math.max(1, Math.min(100, parseInt(document.getElementById('threshold').value) || 20));
   if(fontMode==='canvas')return renderTextCanvas(
     txt, document.getElementById('fontFamily').value,
-    parseInt(document.getElementById('fontSizePreset').value)||12,
+    parseInt(document.getElementById('fontSizeInput').value)||11,
     document.getElementById('chkBold').checked,
     document.getElementById('chkItalic').checked,
     threshPct
@@ -1707,11 +1707,37 @@ function bindEvents(){
 
   // Font mode
   document.querySelectorAll('.seg-btn').forEach(btn=>btn.addEventListener('click',()=>setFontMode(btn.dataset.mode)));
-  const slider=document.getElementById('fontSizeSlider'),szSel=document.getElementById('fontSizePreset');
-  slider.addEventListener('input',()=>{szSel.value=slider.value;autoUpdateTextPreview();});
-  szSel.addEventListener('change',()=>{slider.value=szSel.value;autoUpdateTextPreview();});
+
+  // Font size: number input ↔ slider, clamped 4–256
+  const slider   = document.getElementById('fontSizeSlider');
+  const numInput = document.getElementById('fontSizeInput');
+  const clampSize = v => Math.max(4, Math.min(256, parseInt(v) || 11));
+  slider.addEventListener('input', () => {
+    numInput.value = slider.value;
+    autoUpdateTextPreview();
+  });
+  numInput.addEventListener('input', () => {
+    const v = clampSize(numInput.value);
+    slider.value = Math.min(72, v);   // slider caps at 72
+    autoUpdateTextPreview();
+  });
+  numInput.addEventListener('change', () => { numInput.value = clampSize(numInput.value); });
+  numInput.addEventListener('keydown', e => {
+    if (e.key === 'ArrowUp')   { e.preventDefault(); numInput.value = clampSize(+numInput.value + 1); slider.value = Math.min(72, +numInput.value); autoUpdateTextPreview(); }
+    if (e.key === 'ArrowDown') { e.preventDefault(); numInput.value = clampSize(+numInput.value - 1); slider.value = Math.min(72, +numInput.value); autoUpdateTextPreview(); }
+  });
+  // Quick preset buttons
+  document.querySelectorAll('.size-preset-btn').forEach(btn => {
+    btn.addEventListener('click', () => {
+      const v = parseInt(btn.dataset.size);
+      numInput.value = v;
+      slider.value   = Math.min(72, v);
+      autoUpdateTextPreview();
+    });
+  });
+
   ['textInput','fontFamily','bitmapFont'].forEach(id=>document.getElementById(id)?.addEventListener('input',autoUpdateTextPreview));
-  ['fontFamily','fontSizePreset','bitmapFont','charSpacing'].forEach(id=>document.getElementById(id)?.addEventListener('change',autoUpdateTextPreview));
+  ['fontFamily','bitmapFont','charSpacing'].forEach(id=>document.getElementById(id)?.addEventListener('change',autoUpdateTextPreview));
   ['chkBold','chkItalic'].forEach(id=>document.getElementById(id)?.addEventListener('change',autoUpdateTextPreview));
   document.getElementById('threshold').addEventListener('input',()=>{syncThresholdLabel();autoUpdateTextPreview();});
   document.getElementById('charSpacing').addEventListener('input',autoUpdateTextPreview);
