@@ -793,14 +793,16 @@ function init() {
 
 // ── Preset font loader (Cubic-11 served from /fonts/) ─────────────────────
 async function loadPresetFonts() {
-  const presets = [
-    { key: 'Cubic-11', url: '/fonts/Cubic_11.ttf' },
-  ];
+  const presets = [{ key: 'Cubic-11', url: '/fonts/Cubic_11.ttf' }];
   for (const {key, url} of presets) {
     try {
       const face = new FontFace(key, `url(${url})`);
       await face.load();
       document.fonts.add(face);
+      // Flush CJK cache so stale "fallback font" entries are not reused
+      cjkBitmapCache.clear();
+      // If user is already in the text tool, refresh the preview now that font is ready
+      if (tool === 'text') autoUpdateTextPreview();
     } catch(e) {
       console.warn(`Preset font "${key}" failed to load:`, e);
     }
@@ -1062,12 +1064,42 @@ function isPixelFont(family) {
 
 // Supersampling scale: SCALE=1 for pixel fonts, higher for anti-aliased fonts
 function ssScale(size, family = '') {
-  if (isPixelFont(family)) return 1;   // pixel font: render at native size
+  if (isPixelFont(family)) return 1;   // pixel font: render at native size, no upscaling
   if (size <= 8)  return 8;
   if (size <= 12) return 6;
   if (size <= 20) return 4;
   if (size <= 36) return 3;
   return 2;
+}
+
+/**
+ * Otsu's method: automatically find the optimal threshold to separate
+ * dark background (0) from bright text (255) in a bimodal pixel distribution.
+ * Pixel fonts at native size produce near-binary pixels; Otsu finds the
+ * exact midpoint between the two clusters, ignoring anti-aliasing levels.
+ */
+function otsuThreshold(data, w, h) {
+  const hist = new Uint32Array(256);
+  for (let i = 0; i < w * h; i++) hist[data[i * 4]]++;
+  const total = w * h;
+  let sumAll = 0;
+  for (let i = 0; i < 256; i++) sumAll += i * hist[i];
+  let wB = 0, sumB = 0, maxVar = -1, best = 128;
+  for (let t = 0; t < 256; t++) {
+    wB += hist[t]; if (!wB) continue;
+    const wF = total - wB; if (!wF) break;
+    sumB += t * hist[t];
+    const mB = sumB / wB, mF = (sumAll - sumB) / wF;
+    const v = wB * wF * (mB - mF) ** 2;
+    if (v > maxVar) { maxVar = v; best = t; }
+  }
+  const grid = [];
+  for (let y = 0; y < h; y++) {
+    const row = [];
+    for (let x = 0; x < w; x++) row.push(data[(y * w + x) * 4] > best ? 1 : 0);
+    grid.push(row);
+  }
+  return grid;
 }
 
 // Apply adaptive threshold: threshPct (1-100) = % of max brightness to include
@@ -1097,6 +1129,13 @@ function renderTextCanvas(text, family, size, bold, italic, threshPct) {
   const SCALE   = ssScale(size, family);
   const bSize   = size * SCALE;
   const fontStr = `${italic?'italic':''} ${bold?'bold':''} ${bSize}px ${family}`.trim();
+
+  // Guard: if the font is not yet loaded, rendering would use a fallback font
+  // (e.g. sans-serif) which looks completely wrong. Return null so the caller
+  // can wait and retry when loadPresetFonts() calls autoUpdateTextPreview().
+  if (isPixelFont(family) && !document.fonts.check(fontStr)) {
+    return null;
+  }
 
   // Measure at high resolution to get accurate bounding box
   const mc = document.createElement('canvas');
@@ -1135,11 +1174,14 @@ function renderTextCanvas(text, family, size, bold, italic, threshPct) {
   if (SCALE > 1) lx.imageSmoothingQuality = 'high';
   lx.drawImage(hc, 0, 0, tw, th);
 
-  // Pixel fonts at native size render near-binary pixels (0 or 255).
-  // Use a fixed low threshold (16/255 ≈ 6%) to catch any lit pixel without
-  // the relative-threshold logic that can behave unpredictably at SCALE=1.
-  const effectiveThreshPct = SCALE === 1 ? 6 : threshPct;
-  const grid = applyRelThreshold(lx.getImageData(0, 0, tw, th).data, tw, th, effectiveThreshPct);
+  const imgData = lx.getImageData(0, 0, tw, th).data;
+  // Pixel fonts at native size (SCALE=1): use Otsu's optimal binary threshold.
+  // This automatically finds the midpoint between dark gaps and bright strokes,
+  // keeping strokes clean and separate regardless of browser anti-aliasing.
+  // Anti-aliased system fonts use the user-controlled relative threshold instead.
+  const grid = SCALE === 1
+    ? otsuThreshold(imgData, tw, th)
+    : (() => { const g = applyRelThreshold(imgData, tw, th, threshPct); return g; })();
   if (!grid) return null;
   return trimGrid(grid);
 }
@@ -1196,18 +1238,41 @@ function getCJKRaw(ch, size, family) {
   lx.drawImage(tc, 0, 0, bw, srcH, 0, 0, lw, lh);
 
   const imgData = lx.getImageData(0, 0, lw, lh).data;
+
+  // For pixel fonts at SCALE=1: pre-compute Otsu threshold and store it.
+  // For other fonts: store raw brightness for caller to threshold later.
+  let otsu = -1;
+  if (SCALE === 1) {
+    // Compute Otsu threshold now so renderCJKChar can do clean binary output
+    const hist = new Uint32Array(256);
+    for (let i = 0; i < lw * lh; i++) hist[imgData[i * 4]]++;
+    const tot = lw * lh;
+    let sumAll = 0;
+    for (let i = 0; i < 256; i++) sumAll += i * hist[i];
+    let wB = 0, sumB = 0, maxV = -1;
+    for (let t = 0; t < 256; t++) {
+      wB += hist[t]; if (!wB) continue;
+      const wF = tot - wB; if (!wF) break;
+      sumB += t * hist[t];
+      const mB = sumB / wB, mF = (sumAll - sumB) / wF;
+      const v = wB * wF * (mB - mF) ** 2;
+      if (v > maxV) { maxV = v; otsu = t; }
+    }
+  }
+
   const raw = new Uint8Array(lw * lh);
   let maxB = 0;
   for (let i = 0; i < raw.length; i++) { raw[i] = imgData[i * 4]; if (raw[i] > maxB) maxB = raw[i]; }
 
-  const entry = {raw, w: lw, h: lh, maxB};
+  const entry = {raw, w: lw, h: lh, maxB, otsu, scale: SCALE};
   cjkRawCache.set(key, entry);
   return entry;
 }
 
 function renderCJKChar(ch, size, family, threshPct) {
-  const {raw, w, h, maxB} = getCJKRaw(ch, size, family);
-  const thresh = Math.max(1, maxB * (threshPct / 100));
+  const {raw, w, h, maxB, otsu, scale} = getCJKRaw(ch, size, family);
+  // Pixel fonts (scale=1): use Otsu optimal threshold; system fonts: use user pct
+  const thresh = (scale === 1 && otsu >= 0) ? otsu : Math.max(1, maxB * (threshPct / 100));
   const grid = [];
   for (let y = 0; y < h; y++) {
     const row = [];
