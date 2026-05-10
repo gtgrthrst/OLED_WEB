@@ -245,6 +245,9 @@
           <div class="form-row">
             <label>字體家族</label>
             <select id="fontFamily">
+              <optgroup label="像素字體（推薦）">
+                <option value="Cubic-11">Cubic-11（方塊像素，支援中文）</option>
+              </optgroup>
               <optgroup label="無襯線">
                 <option value="sans-serif">無襯線 Sans-serif</option>
                 <option value="Arial">Arial</option>
@@ -437,6 +440,12 @@
           <label>圖像名稱</label>
           <input type="text" id="exportName" value="my_image">
         </div>
+        <label class="crop-toggle" title="掃描像素邊界，移除四周空白，輸出最緊湊的尺寸">
+          <input type="checkbox" id="chkCropExport">
+          <span class="material-icons crop-toggle-ic">crop</span>
+          <span>自動裁減空白區域</span>
+          <span class="crop-info" id="cropInfo"></span>
+        </label>
         <div class="export-grid">
           <button class="btn-export" data-format="micropython">
             <span class="exp-icon">🐍</span>

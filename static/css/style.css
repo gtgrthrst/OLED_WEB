@@ -122,6 +122,22 @@ h1 { font-size:14px; font-weight:600; }
 .page-bar-action:hover { border-color:var(--accent2); color:var(--accent2); }
 .page-bar-action .material-icons { font-size:14px !important; }
 
+/* ── Crop export toggle ──────────────────────────────────── */
+.crop-toggle {
+  display:flex; align-items:center; gap:5px; cursor:pointer;
+  font-size:11px; color:var(--text-dim); padding:5px 0;
+  border-top:1px solid var(--border); margin-top:4px; margin-bottom:6px;
+  transition:color .12s;
+}
+.crop-toggle:hover { color:var(--text); }
+.crop-toggle input { accent-color:var(--accent); cursor:pointer; }
+.crop-toggle input:checked ~ span { color:var(--accent); }
+.crop-toggle-ic { font-size:14px !important; }
+.crop-info {
+  margin-left:auto; font-size:10px; color:var(--accent);
+  font-variant-numeric:tabular-nums; white-space:nowrap;
+}
+
 /* ── Layer export section ────────────────────────────────── */
 .layer-export-section { margin-top:2px; }
 .layer-export-top {

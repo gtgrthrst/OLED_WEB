@@ -788,6 +788,53 @@ function init() {
   if (pnEl) pnEl.value = projectName;
   syncThresholdLabel();
   loadCodepoints(); _ensureFont();
+  loadPresetFonts();
+}
+
+// ── Preset font loader (Cubic-11 served from /fonts/) ─────────────────────
+async function loadPresetFonts() {
+  const presets = [
+    { key: 'Cubic-11', url: '/fonts/Cubic_11.ttf' },
+  ];
+  for (const {key, url} of presets) {
+    try {
+      const face = new FontFace(key, `url(${url})`);
+      await face.load();
+      document.fonts.add(face);
+    } catch(e) {
+      console.warn(`Preset font "${key}" failed to load:`, e);
+    }
+  }
+}
+
+// ── Export crop helper ────────────────────────────────────────────────────
+// Returns {pixels, width, height, offsetX, offsetY} after trimming empty borders
+function getCroppedComposite() {
+  const comp = getComposite();
+  let top = H, bot = -1, lft = W, rgt = -1;
+  for (let y = 0; y < H; y++)
+    for (let x = 0; x < W; x++)
+      if (comp[y][x]) {
+        if (y < top) top = y; if (y > bot) bot = y;
+        if (x < lft) lft = x; if (x > rgt) rgt = x;
+      }
+  if (bot < 0) return { pixels: comp, width: W, height: H, offsetX: 0, offsetY: 0 };
+  const pixels = [];
+  for (let y = top; y <= bot; y++) pixels.push(comp[y].slice(lft, rgt + 1));
+  return { pixels, width: rgt - lft + 1, height: bot - top + 1, offsetX: lft, offsetY: top };
+}
+
+function syncCropInfo() {
+  const chk = document.getElementById('chkCropExport');
+  const info = document.getElementById('cropInfo');
+  if (!info) return;
+  if (!chk?.checked) { info.textContent = ''; return; }
+  const {width, height, offsetX, offsetY} = getCroppedComposite();
+  if (width === W && height === H) {
+    info.textContent = '（無空白可裁）';
+  } else {
+    info.textContent = `→ ${width}×${height} @ (${offsetX},${offsetY})`;
+  }
 }
 
 // ══════════════════════════════════════════════════════════════════════════
@@ -1524,15 +1571,36 @@ function updateInfo(){
 // ══════════════════════════════════════════════════════════════════════════
 async function doExport(format){
   saveCurrentPage();
-  const name=document.getElementById('exportName').value.trim()||'my_image';
-  const comp=getComposite();
-  if(format==='json'){dlText(JSON.stringify({width:W,height:H,layers,activeLayerId,name},null,2),name+'.json','application/json');toast('JSON 已下載（含圖層）','ok');return;}
-  try{const res=await fetch('/api/export',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({width:W,height:H,pixels:comp,format,name})});const data=await res.json();if(data.error){toast('錯誤：'+data.error,'err');return;}showModal(data.code,format,name);}
-  catch(e){toast('請求失敗：'+e.message,'err');}
+  const name   = document.getElementById('exportName').value.trim() || 'my_image';
+  const doCrop = document.getElementById('chkCropExport')?.checked;
+  const {pixels, width, height, offsetX, offsetY} = doCrop
+    ? getCroppedComposite()
+    : {pixels: getComposite(), width: W, height: H, offsetX: 0, offsetY: 0};
+  const wasCropped = doCrop && (width !== W || height !== H);
+  const cropNote   = wasCropped
+    ? `\n# Cropped from ${W}×${H} canvas, content offset (${offsetX}, ${offsetY})`
+    : '';
+
+  if(format==='json'){
+    const data = {width, height, layers, activeLayerId, name};
+    if(wasCropped) data._cropMeta = {originalW:W, originalH:H, offsetX, offsetY};
+    dlText(JSON.stringify(data,null,2), name+'.json', 'application/json');
+    toast('JSON 已下載（含圖層）','ok'); return;
+  }
+  try{
+    const res  = await fetch('/api/export',{
+      method:'POST', headers:{'Content-Type':'application/json'},
+      body: JSON.stringify({width, height, pixels, format, name, cropNote}),
+    });
+    const data = await res.json();
+    if(data.error){ toast('錯誤：'+data.error,'err'); return; }
+    showModal(data.code, format, name, wasCropped ? `${width}×${height}` : '');
+  }catch(e){ toast('請求失敗：'+e.message,'err'); }
 }
-function showModal(code,format,name){
+function showModal(code, format, name, sizeNote=''){
   const labels={micropython:'MicroPython 程式碼',framebuf:'Framebuf Bitmap',c_array:'C/Arduino 程式碼'};
-  document.getElementById('modalTitle').textContent=labels[format]||format;
+  const base = labels[format]||format;
+  document.getElementById('modalTitle').textContent = sizeNote ? `${base}  ✂ ${sizeNote}` : base;
   document.getElementById('codeOutput').textContent=code;
   document.getElementById('codeModal').style.display='flex';
   document.getElementById('btnDownloadCode').onclick=()=>dlText(code,name+(format==='c_array'?'.h':'.py'),'text/plain');
@@ -1676,6 +1744,7 @@ function bindEvents(){
   document.getElementById('btnCancelImg').addEventListener('click',()=>{importImg=null;imgCropRect=null;document.getElementById('imgImportOpts').style.display='none';});
   setupCropEvents();
 
+  document.getElementById('chkCropExport')?.addEventListener('change', syncCropInfo);
   document.querySelectorAll('.btn-export').forEach(btn=>btn.addEventListener('click',()=>doExport(btn.dataset.format)));
   document.getElementById('btnLoadJson').addEventListener('click',()=>document.getElementById('fileInput').click());
   document.getElementById('fileInput').addEventListener('change',e=>{if(e.target.files[0])loadJson(e.target.files[0]);e.target.value='';});
