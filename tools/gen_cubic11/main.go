@@ -1,0 +1,240 @@
+// gen_cubic11 – Pre-rasterize Cubic-11 glyphs using Go's sfnt rasterizer
+// Usage: go run main.go > ../../static/js/cubic11.js
+
+package main
+
+import (
+	"fmt"
+	"image"
+	"os"
+	"strings"
+
+	"golang.org/x/image/font"
+	"golang.org/x/image/font/sfnt"
+	"golang.org/x/image/math/fixed"
+	"golang.org/x/image/vector"
+)
+
+const cjkSet = `零一二三四五六七八九十百千萬億兆度分秒時日月年週` +
+	`上下左右前後內外中心開關閉進出停啟` +
+	`設定確認取消返回選擇切換模式` +
+	`音量亮度溫度濕度速度電壓電流功率頻率` +
+	`首頁目錄資料檔案儲存載入匯出匯入` +
+	`連接斷線搜尋配對已完成失敗錯誤警告` +
+	`顯示隱藏啟用停用自動手動` +
+	`藍牙無線網路訊號強弱` +
+	`主次高低快慢多少大小長短` +
+	`數字字母符號空格換行` +
+	`工作休眠暫停執行結束重啟` +
+	`是否好壞新舊讀寫送收` +
+	`一般標準專業進階` +
+	`版本更新韌體程式` +
+	`電池充電滿格低電` +
+	`計時器鬧鐘提醒通知` +
+	`感應偵測觸發輸入輸出` +
+	`紅綠藍黃白黑灰` +
+	`攝氏華氏百分比` +
+	`加減乘除等於不等大於小於` +
+	`開始暫停停止錄製播放` +
+	`上傳下載備份還原` +
+	`密碼鎖定解鎖` +
+	`確定返回退出` +
+	`正負正確錯誤` +
+	`網路連線離線` +
+	`裝置設備系統` +
+	`記憶體儲存空間` +
+	`處理器核心` +
+	`感謝歡迎您好再見` +
+	`你我他她它們的是在有這那什麼為什麼怎麼` +
+	`可以要不也都還沒很好大小多少` +
+	`地方人家事情用看知道` +
+	`中文字體像素顯示器螢幕`
+
+type Glyph struct{ W, H int; Rows []uint32 }
+
+func renderGlyph(f *sfnt.Font, buf *sfnt.Buffer, ch rune, sizeF int) (*Glyph, error) {
+	ppem := fixed.Int26_6(sizeF * 64)
+
+	gi, err := f.GlyphIndex(buf, ch)
+	if err != nil || gi == 0 {
+		return nil, fmt.Errorf("glyph not found: %q", ch)
+	}
+
+	// Get font metrics for correct baseline
+	metrics, err := f.Metrics(buf, ppem, font.HintingFull)
+	if err != nil {
+		return nil, fmt.Errorf("metrics: %v", err)
+	}
+
+	adv, err := f.GlyphAdvance(buf, gi, ppem, font.HintingFull)
+	if err != nil {
+		return nil, fmt.Errorf("advance: %v", err)
+	}
+
+	segs, err := f.LoadGlyph(buf, gi, ppem, nil)
+	if err != nil {
+		return nil, fmt.Errorf("load glyph: %v", err)
+	}
+
+	// Canvas: use sizeF as height so we never clip any row regardless of metrics
+	ascent  := metrics.Ascent.Ceil()
+	h := sizeF + 4  // always enough room: full em square + padding
+	gW := adv.Ceil(); if gW < 1 { gW = 1 }
+	w := gW + 4  // extra horizontal room for any overhang
+
+	dst := image.NewGray(image.Rect(0, 0, w, h))
+	r   := vector.NewRasterizer(w, h)
+
+	// Baseline: ascent pixels from top, no left offset
+	baselineY := fixed.Int26_6(ascent * 64)
+
+	for _, seg := range segs {
+		switch seg.Op {
+		case sfnt.SegmentOpMoveTo:
+			r.MoveTo(float32(seg.Args[0].X)/64, float32(baselineY-seg.Args[0].Y)/64)
+		case sfnt.SegmentOpLineTo:
+			r.LineTo(float32(seg.Args[0].X)/64, float32(baselineY-seg.Args[0].Y)/64)
+		case sfnt.SegmentOpQuadTo:
+			r.QuadTo(float32(seg.Args[0].X)/64, float32(baselineY-seg.Args[0].Y)/64,
+				float32(seg.Args[1].X)/64, float32(baselineY-seg.Args[1].Y)/64)
+		case sfnt.SegmentOpCubeTo:
+			r.CubeTo(float32(seg.Args[0].X)/64, float32(baselineY-seg.Args[0].Y)/64,
+				float32(seg.Args[1].X)/64, float32(baselineY-seg.Args[1].Y)/64,
+				float32(seg.Args[2].X)/64, float32(baselineY-seg.Args[2].Y)/64)
+		}
+	}
+	r.ClosePath()
+	r.Draw(dst, dst.Bounds(), image.White, image.Point{})
+
+	thresh := otsu(dst)
+
+	// Find vertical bounding box (trim empty top/bottom rows)
+	topRow, botRow := h, -1
+	for y := 0; y < h; y++ {
+		for x := 0; x < gW; x++ {
+			if dst.GrayAt(x, y).Y > thresh {
+				if y < topRow { topRow = y }
+				if y > botRow { botRow = y }
+			}
+		}
+	}
+
+	// Empty glyph (space or no outline)
+	if botRow < topRow {
+		return &Glyph{W: gW, H: 1, Rows: []uint32{0}}, nil
+	}
+
+	// Pack rows: sample exactly gW pixels starting at x=0
+	gH := botRow - topRow + 1
+	rows := make([]uint32, gH)
+	for y := topRow; y <= botRow; y++ {
+		var row uint32
+		for x := 0; x < gW; x++ {
+			if dst.GrayAt(x, y).Y > thresh {
+				row |= uint32(1) << uint(gW-1-x)
+			}
+		}
+		rows[y-topRow] = row
+	}
+	return &Glyph{W: gW, H: gH, Rows: rows}, nil
+}
+
+func otsu(img *image.Gray) uint8 {
+	var hist [256]int
+	b := img.Bounds()
+	tot := b.Dx() * b.Dy()
+	for y := b.Min.Y; y < b.Max.Y; y++ {
+		for x := b.Min.X; x < b.Max.X; x++ { hist[img.GrayAt(x, y).Y]++ }
+	}
+	sumAll := 0; for i, c := range hist { sumAll += i * c }
+	wB, sumB, maxV, best := 0, 0, -1.0, uint8(128)
+	for t := 0; t < 256; t++ {
+		wB += hist[t]; if wB == 0 { continue }
+		wF := tot - wB; if wF == 0 { break }
+		sumB += t * hist[t]
+		mB := float64(sumB) / float64(wB)
+		mF := float64(sumAll-sumB) / float64(wF)
+		if v := float64(wB) * float64(wF) * (mB - mF) * (mB - mF); v > maxV { maxV = v; best = uint8(t) }
+	}
+	return best
+}
+
+func jsKey(ch rune) string {
+	switch ch {
+	case '\'': return `"'"`
+	case '"':  return `'"'`
+	case '\\': return `'\\'`
+	}
+	return fmt.Sprintf("'%c'", ch)
+}
+
+func main() {
+	data, err := os.ReadFile("../../static/fonts/Cubic_11.ttf")
+	if err != nil { fmt.Fprintln(os.Stderr, err); os.Exit(1) }
+	f, err := sfnt.Parse(data)
+	if err != nil { fmt.Fprintln(os.Stderr, err); os.Exit(1) }
+	buf := &sfnt.Buffer{}
+
+	// Deduplicate character set
+	seen := map[rune]bool{}
+	var chars []rune
+	for r := rune(32); r <= 126; r++ { chars = append(chars, r); seen[r] = true }
+	for _, r := range []rune(cjkSet) {
+		if !seen[r] { seen[r] = true; chars = append(chars, r) }
+	}
+
+	fmt.Println("// Generated by tools/gen_cubic11/main.go – DO NOT EDIT")
+	fmt.Println("// Cubic-11 pre-rasterized bitmaps (Go sfnt + Otsu threshold)")
+	fmt.Println("// Regenerate: cd tools/gen_cubic11 && go run main.go > ../../static/js/cubic11.js")
+	fmt.Println("/* global CUBIC11 */")
+	fmt.Println("const CUBIC11 = {};")
+
+	for _, sz := range []int{8, 11, 16, 24} {
+		fmt.Printf("\nCUBIC11[%d] = {\n", sz)
+		ok, skip := 0, 0
+		for i, ch := range chars {
+			g, err := renderGlyph(f, buf, ch, sz)
+			if err != nil { skip++; continue }
+			rowStrs := make([]string, len(g.Rows))
+			for j, row := range g.Rows { rowStrs[j] = fmt.Sprintf("0x%X", row) }
+			comma := ","; if i == len(chars)-1 { comma = "" }
+			fmt.Printf("  %s:{w:%d,h:%d,rows:[%s]}%s\n",
+				jsKey(ch), g.W, g.H, strings.Join(rowStrs, ","), comma)
+			ok++
+		}
+		fmt.Println("};")
+		fmt.Fprintf(os.Stderr, "size=%d: %d glyphs, %d skipped\n", sz, ok, skip)
+	}
+
+	// Emit helper functions directly
+	fmt.Print(`
+function cubic11Grid(ch, size) {
+  const t = CUBIC11[size]; if (!t) return null;
+  const g = t[ch]; if (!g) return null;
+  const {w, h, rows} = g;
+  return rows.map(row => Array.from({length:w}, (_,x) => (row >>> (w-1-x)) & 1));
+}
+
+function cubic11Text(text, size, spacing) {
+  const sp = (spacing !== undefined ? spacing : 1);
+  const grids = [];
+  for (const ch of text) {
+    grids.push(cubic11Grid(ch, size) || cubic11Grid(' ', size) || [[0]]);
+  }
+  if (!grids.length) return null;
+  const h = Math.max(...grids.map(g => g.length));
+  const totalW = grids.reduce((s,g) => s+(g[0]?.length||0), 0) + (grids.length-1)*sp;
+  const out = Array.from({length:h}, () => new Array(totalW).fill(0));
+  let x = 0;
+  for (const g of grids) {
+    const cw = g[0]?.length||0, ch2 = g.length, yOff = h - ch2;
+    for (let y=0; y<ch2; y++) for (let cx=0; cx<cw; cx++) out[yOff+y][x+cx] = g[y][cx];
+    x += cw + sp;
+  }
+  let top=h, bot=-1;
+  for (let y=0;y<h;y++) for (let cx=0;cx<totalW;cx++) if(out[y][cx]){if(y<top)top=y;if(y>bot)bot=y;}
+  if(bot<0) return {grid:[[0]],width:1,height:1};
+  return {grid:out.slice(top,bot+1), width:totalW, height:bot-top+1};
+}
+`)
+}

@@ -1337,7 +1337,6 @@ function trimGrid(grid) {
 // ══════════════════════════════════════════════════════════════════════════
 function buildTextGrid(){
   const txt=document.getElementById('textInput').value; if(!txt.trim())return null;
-  // threshold is now 1-100 (% of max brightness); lower = more detail / thinner strokes
   const threshPct = Math.max(1, Math.min(100, parseInt(document.getElementById('threshold').value) || 20));
   if(fontMode==='canvas')return renderTextCanvas(
     txt, document.getElementById('fontFamily').value,
@@ -1346,8 +1345,16 @@ function buildTextGrid(){
     document.getElementById('chkItalic').checked,
     threshPct
   );
-  const fk=document.getElementById('bitmapFont').value;
-  const sp=parseInt(document.getElementById('charSpacing').value)||1;
+  const fk = document.getElementById('bitmapFont').value;
+  const sp = parseInt(document.getElementById('charSpacing').value) || 1;
+
+  // Cubic-11 pre-rasterized path (bypasses canvas font rendering entirely)
+  if (fk.startsWith('cubic11_')) {
+    const size = parseInt(fk.replace('cubic11_','')) || 11;
+    if (typeof cubic11Text === 'function') return cubic11Text(txt, size, sp);
+    // fallback: canvas path if js not yet loaded
+  }
+
   return CJK_FONTS[fk] ? renderCJKText(txt,fk,sp,threshPct) : renderText(txt,fk,sp,fk.includes('bold'));
 }
 function autoUpdateTextPreview(){
