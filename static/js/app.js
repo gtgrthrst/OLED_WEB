@@ -1037,6 +1037,53 @@ function rotCW(){
   else render();renderPreview();
 }
 function rotCCW(){rotCW();rotCW();rotCW();}
+function scaleLayer(pct){
+  const l=getActiveLayer();if(!l)return;
+  const factor=Math.max(0.1,pct/100);
+  const nw=Math.max(1,Math.round(l.w*factor));
+  const nh=Math.max(1,Math.round(l.h*factor));
+  saveUndo();
+  l.grid=Array.from({length:nh},(_,ny)=>{
+    const oy=Math.floor(ny*l.h/nh);
+    return Array.from({length:nw},(_,nx)=>{
+      const ox=Math.floor(nx*l.w/nw);
+      return l.grid[oy]?.[ox]??0;
+    });
+  });
+  l.w=nw;l.h=nh;render();renderPreview();updateInfo();
+  toast(`縮放至 ${nw}×${nh}`,'ok');
+}
+function rotateLayer(deg){
+  const l=getActiveLayer();if(!l)return;
+  const rad=deg*Math.PI/180;
+  const cosA=Math.abs(Math.cos(rad)),sinA=Math.abs(Math.sin(rad));
+  const nw=Math.ceil(l.w*cosA+l.h*sinA);
+  const nh=Math.ceil(l.w*sinA+l.h*cosA);
+  // Draw source grid onto off-screen canvas
+  const src=document.createElement('canvas');src.width=l.w;src.height=l.h;
+  const sc=src.getContext('2d');
+  const id=sc.createImageData(l.w,l.h);
+  for(let y=0;y<l.h;y++)for(let x=0;x<l.w;x++){
+    const i=(y*l.w+x)*4,v=l.grid[y]?.[x]?255:0;
+    id.data[i]=id.data[i+1]=id.data[i+2]=v;id.data[i+3]=255;
+  }
+  sc.putImageData(id,0,0);
+  // Rotate onto dest canvas
+  const dst=document.createElement('canvas');dst.width=nw;dst.height=nh;
+  const dc=dst.getContext('2d');
+  dc.fillStyle='#000';dc.fillRect(0,0,nw,nh);
+  dc.save();dc.translate(nw/2,nh/2);dc.rotate(rad);
+  dc.drawImage(src,-l.w/2,-l.h/2);dc.restore();
+  // Threshold to binary (adaptive: 30% of max brightness)
+  const out=dc.getImageData(0,0,nw,nh).data;
+  let maxV=0;
+  for(let i=0;i<out.length;i+=4)if(out[i]>maxV)maxV=out[i];
+  const thresh=Math.max(16,maxV*0.3);
+  saveUndo();
+  l.grid=Array.from({length:nh},(_,y)=>Array.from({length:nw},(_,x)=>out[(y*nw+x)*4]>thresh?1:0));
+  l.w=nw;l.h=nh;render();renderPreview();updateInfo();
+  toast(`旋轉 ${deg}°`,'ok');
+}
 function shift(dx,dy){
   const l=getActiveLayer();if(!l)return;saveUndo();
   l.x+=dx;l.y+=dy;render();renderPreview();
@@ -1836,6 +1883,8 @@ function bindEvents(){
   document.getElementById('btnShiftU').addEventListener('click',()=>shift(0,-1));
   document.getElementById('btnShiftD').addEventListener('click',()=>shift(0,1));
   document.getElementById('btnCenter').addEventListener('click',centerH);
+  document.getElementById('btnScaleLayer').addEventListener('click',()=>scaleLayer(parseInt(document.getElementById('scalePercent').value)||200));
+  document.getElementById('btnRotAngle').addEventListener('click',()=>rotateLayer(parseInt(document.getElementById('rotAngle').value)||45));
   document.getElementById('btnUndo').addEventListener('click',undo);
   document.getElementById('btnRedo').addEventListener('click',redo);
   document.getElementById('btnClear').addEventListener('click',()=>{saveUndo();const l=getActiveLayer();if(l){l.grid=Array.from({length:l.h},()=>new Array(l.w).fill(0));}render();renderPreview();updateInfo();toast('圖層已清除');});
