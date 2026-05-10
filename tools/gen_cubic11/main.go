@@ -106,7 +106,17 @@ func renderGlyph(f *sfnt.Font, buf *sfnt.Buffer, ch rune, sizeF int) (*Glyph, er
 	r.ClosePath()
 	r.Draw(dst, dst.Bounds(), image.White, image.Point{})
 
-	thresh := otsu(dst)
+	// Use max-relative threshold: 30% of the brightest pixel in the glyph.
+	// Otsu overshoots for pixel fonts where thin strokes produce faint anti-aliased
+	// pixels (~50-120/255) that should be treated as "on".
+	var maxPx uint8
+	for y := 0; y < h; y++ {
+		for x := 0; x < w; x++ {
+			if v := dst.GrayAt(x, y).Y; v > maxPx { maxPx = v }
+		}
+	}
+	thresh := uint8(1)
+	if maxPx > 0 { thresh = uint8(uint32(maxPx) * 15 / 100) }
 
 	// Find vertical bounding box (trim empty top/bottom rows)
 	topRow, botRow := h, -1
@@ -139,25 +149,6 @@ func renderGlyph(f *sfnt.Font, buf *sfnt.Buffer, ch rune, sizeF int) (*Glyph, er
 	return &Glyph{W: gW, H: gH, Rows: rows}, nil
 }
 
-func otsu(img *image.Gray) uint8 {
-	var hist [256]int
-	b := img.Bounds()
-	tot := b.Dx() * b.Dy()
-	for y := b.Min.Y; y < b.Max.Y; y++ {
-		for x := b.Min.X; x < b.Max.X; x++ { hist[img.GrayAt(x, y).Y]++ }
-	}
-	sumAll := 0; for i, c := range hist { sumAll += i * c }
-	wB, sumB, maxV, best := 0, 0, -1.0, uint8(128)
-	for t := 0; t < 256; t++ {
-		wB += hist[t]; if wB == 0 { continue }
-		wF := tot - wB; if wF == 0 { break }
-		sumB += t * hist[t]
-		mB := float64(sumB) / float64(wB)
-		mF := float64(sumAll-sumB) / float64(wF)
-		if v := float64(wB) * float64(wF) * (mB - mF) * (mB - mF); v > maxV { maxV = v; best = uint8(t) }
-	}
-	return best
-}
 
 func jsKey(ch rune) string {
 	switch ch {
