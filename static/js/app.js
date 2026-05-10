@@ -65,7 +65,7 @@ let panStart  = {x:0,y:0,px:0,py:0};
 
 // ── Fonts ─────────────────────────────────────────────────────────────────
 let uploadedFonts = [];
-const cjkBitmapCache = new Map();
+// cjkBitmapCache removed — cjkRawCache (below) is the active store
 
 // ── Layer drag (panel reorder) ────────────────────────────────────────────
 let panelDragId = null;
@@ -802,7 +802,7 @@ async function loadPresetFonts() {
       await face.load();
       document.fonts.add(face);
       // Flush CJK cache so stale "fallback font" entries are not reused
-      cjkBitmapCache.clear();
+      cjkRawCache.clear();
       // If user is already in the text tool, refresh the preview now that font is ready
       if (tool === 'text') autoUpdateTextPreview();
     } catch(e) {
