@@ -271,14 +271,14 @@
           <div class="form-row">
             <label>字體大小</label>
             <div class="size-row-new">
-              <input type="number" id="fontSizeInput" value="11" min="4" max="256" step="1">
+              <input type="number" id="fontSizeInput" value="12" min="4" max="256" step="1">
               <span class="size-unit">px</span>
-              <input type="range" id="fontSizeSlider" min="4" max="72" value="11" step="1">
+              <input type="range" id="fontSizeSlider" min="4" max="72" value="12" step="1">
             </div>
             <div class="size-presets">
               <button class="size-preset-btn" data-size="7">7</button>
               <button class="size-preset-btn" data-size="8">8</button>
-              <button class="size-preset-btn" data-size="11" title="Cubic-11 原生尺寸">11★</button>
+              <button class="size-preset-btn" data-size="10">10</button>
               <button class="size-preset-btn" data-size="12">12</button>
               <button class="size-preset-btn" data-size="16">16</button>
               <button class="size-preset-btn" data-size="24">24</button>
@@ -306,11 +306,13 @@
           <div class="form-row">
             <label>字型</label>
             <select id="bitmapFont">
-              <optgroup label="Cubic-11（OFL，支援中文）">
-                <option value="cubic11_8">Cubic-11  8px（僅 ASCII）</option>
-                <option value="cubic11_11">Cubic-11 11px（僅 ASCII）</option>
-                <option value="cubic11_16" selected>Cubic-11 16px（中文推薦）</option>
-                <option value="cubic11_24">Cubic-11 24px（中文標題）</option>
+              <optgroup label="Fusion Pixel（OFL，支援中文）">
+                <option value="arkpixel_8">Fusion Pixel  8px（CJK 完整）</option>
+                <option value="arkpixel_10">Fusion Pixel 10px（CJK 完整）</option>
+              </optgroup>
+              <optgroup label="Ark Pixel（OFL，支援中文）">
+                <option value="arkpixel_12" selected>Ark Pixel 12px（CJK 完整推薦）</option>
+                <option value="arkpixel_16">Ark Pixel 16px（CJK 部分）</option>
               </optgroup>
               <optgroup label="ASCII 點陣">
                 <option value="5x7">5×7 標準</option>
@@ -600,7 +602,7 @@
 </div>
 
 <script src="js/fonts.js"></script>
-<script src="js/cubic11.js"></script>
+<script src="js/arkpixel.js"></script>
 <script src="js/icons.js"></script>
 <script src="js/app.js"></script>
 </body>

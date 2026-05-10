@@ -2,6 +2,11 @@
 oled_web
 oled_web.exe
 
+# Tool compiled binaries
+tools/gen_cubic11/gen_cubic11
+tools/gen_cubic11/oled_web
+tools/gen_arkpixel/gen_arkpixel
+
 # Go build cache
 *.test
 

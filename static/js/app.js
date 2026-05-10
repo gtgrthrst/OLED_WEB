@@ -27,7 +27,7 @@ let tool = 'pencil';
 let drawColor = 1;
 let brushSize = 1;
 let showGrid = true;
-let fontMode = 'bitmap';  // default: bitmap mode (Cubic-11)
+let fontMode = 'bitmap';  // default: bitmap mode (Ark Pixel)
 
 // ── Drawing state ─────────────────────────────────────────────────────────
 let isDrawing = false;
@@ -793,21 +793,23 @@ function init() {
   loadPresetFonts();
 }
 
-// ── Preset font loader (Cubic-11 served from /fonts/) ─────────────────────
+// ── Preset font loader (Ark Pixel served from /fonts/) ────────────────────
 async function loadPresetFonts() {
-  const presets = [{ key: 'Cubic-11', url: '/fonts/Cubic_11.ttf' }];
-  for (const {key, url} of presets) {
-    try {
-      const face = new FontFace(key, `url(${url})`);
+  const name = 'Ark Pixel';
+  const sources = [
+    { url: '/fonts/ark-pixel-16px-monospaced-latin.ttf',  range: 'U+0020-00FF' },
+    { url: '/fonts/ark-pixel-16px-monospaced-zh_tw.ttf',  range: 'U+2E80-9FFF, U+F900-FAFF' },
+  ];
+  try {
+    for (const {url, range} of sources) {
+      const face = new FontFace(name, `url(${url})`, { unicodeRange: range });
       await face.load();
       document.fonts.add(face);
-      // Flush CJK cache so stale "fallback font" entries are not reused
-      cjkRawCache.clear();
-      // If user is already in the text tool, refresh the preview now that font is ready
-      if (tool === 'text') autoUpdateTextPreview();
-    } catch(e) {
-      console.warn(`Preset font "${key}" failed to load:`, e);
     }
+    cjkRawCache.clear();
+    if (tool === 'text') autoUpdateTextPreview();
+  } catch(e) {
+    console.warn(`Preset font "${name}" failed to load:`, e);
   }
 }
 
@@ -1057,7 +1059,7 @@ function centerH(){
 // Pixel fonts: designed on a pixel grid → render at 1× (no supersampling).
 // Supersampling makes things *worse* for pixel fonts because adjacent 1px strokes
 // blur into each other when the over-sized render is resampled back down.
-const PIXEL_FONT_KEYS = ['Cubic-11', 'Cubic_11', 'Press Start 2P', 'Pixel', 'PixelFont'];
+const PIXEL_FONT_KEYS = ['Ark Pixel', 'ark-pixel', 'Cubic-11', 'Cubic_11', 'Press Start 2P', 'Pixel', 'PixelFont'];
 function isPixelFont(family) {
   if (!family) return false;
   const f = family.toLowerCase();
@@ -1065,7 +1067,7 @@ function isPixelFont(family) {
 }
 
 // Supersampling scale.
-// Pixel fonts (Cubic-11 etc.): SCALE=2, NOT 1.
+// Pixel fonts (Ark Pixel etc.): SCALE=2, NOT 1.
 // Reason: at native 11px the browser has NO pure-255 pixels and a completely
 // continuous brightness distribution (measured: max=236, no clear bimodal peak).
 // At 2× (22px) there are pure-255 pixels and a much cleaner distribution
@@ -1343,11 +1345,11 @@ function buildTextGrid(){
   const fk = document.getElementById('bitmapFont').value;
   const sp = parseInt(document.getElementById('charSpacing').value) || 1;
 
-  // Cubic-11 pre-rasterized path (bypasses canvas font rendering entirely)
-  if (fk.startsWith('cubic11_')) {
-    const size = parseInt(fk.replace('cubic11_','')) || 11;
-    if (typeof cubic11Text === 'function') return cubic11Text(txt, size, sp);
-    return null;  // cubic11.js not yet loaded – caller will retry
+  // Ark Pixel pre-rasterized path (bypasses canvas font rendering entirely)
+  if (fk.startsWith('arkpixel_')) {
+    const size = parseInt(fk.replace('arkpixel_','')) || 12;
+    if (typeof arkpixelText === 'function') return arkpixelText(txt, size, sp);
+    return null;  // arkpixel.js not yet loaded – caller will retry
   }
 
   return CJK_FONTS[fk] ? renderCJKText(txt,fk,sp,threshPct) : renderText(txt,fk,sp,fk.includes('bold'));
