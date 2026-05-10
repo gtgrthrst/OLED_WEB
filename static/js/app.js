@@ -1088,22 +1088,31 @@ function renderTextCanvas(text, family, size, bold, italic, threshPct) {
   const bSize   = size * SCALE;
   const fontStr = `${italic?'italic':''} ${bold?'bold':''} ${bSize}px ${family}`.trim();
 
-  // Measure at high resolution
+  // Measure at high resolution to get accurate bounding box
   const mc = document.createElement('canvas');
   mc.width = 8192; mc.height = bSize * 4;
   const mx = mc.getContext('2d'); mx.font = fontStr;
-  const m   = mx.measureText(text);
-  const bW  = Math.ceil(m.width) + bSize;
-  const bH  = bSize + Math.ceil(m.actualBoundingBoxDescent || bSize * 0.3) + 8;
+  const m = mx.measureText(text);
 
-  // Render at bSize
+  // KEY FIX: with textBaseline='top', actualBoundingBoxAscent > 0 means the
+  // glyph extends ABOVE the drawing y-coordinate and gets clipped if y is too small.
+  // Solution: pad the drawing y by the ascent amount so the glyph always fits.
+  const ascent  = Math.max(0, Math.ceil(m.actualBoundingBoxAscent  || 0));
+  const descent = Math.max(0, Math.ceil(m.actualBoundingBoxDescent || bSize * 0.15));
+  const PAD     = Math.ceil(bSize * 0.1) + 4;   // safety margin
+  const textX   = PAD;
+  const textY   = ascent + PAD;                  // enough room above glyph top
+  const bW      = Math.ceil(m.width) + bSize;
+  const bH      = textY + bSize + descent + PAD; // enough room below glyph bottom
+
+  // Render at bSize with correct vertical offset
   const hc = document.createElement('canvas');
   hc.width  = Math.max(bW, 1);
   hc.height = Math.max(bH, 1);
   const hx  = hc.getContext('2d');
   hx.fillStyle = '#000'; hx.fillRect(0, 0, hc.width, hc.height);
   hx.fillStyle = '#fff'; hx.font = fontStr; hx.textBaseline = 'top';
-  hx.fillText(text, bSize * 0.125, bSize * 0.125);
+  hx.fillText(text, textX, textY);
 
   // Downsample to target size
   const tw = Math.max(Math.ceil(bW / SCALE), 1);
@@ -1139,27 +1148,43 @@ function getCJKRaw(ch, size, family) {
 
   const SCALE = ssScale(size);
   const bSize = size * SCALE;
-  const tc    = document.createElement('canvas');
-  tc.width    = bSize * 2; tc.height = bSize * 2;
-  const tx    = tc.getContext('2d');
+
+  // Measure first to detect ascent (same clipping issue as renderTextCanvas)
+  const mc  = document.createElement('canvas');
+  mc.width  = bSize * 3; mc.height = bSize * 3;
+  const mx  = mc.getContext('2d');
+  mx.font   = `${bSize}px ${family}`; mx.textBaseline = 'top';
+  const m   = mx.measureText(ch);
+  const ascent  = Math.max(0, Math.ceil(m.actualBoundingBoxAscent  || 0));
+  const descent = Math.max(0, Math.ceil(m.actualBoundingBoxDescent || bSize * 0.15));
+  const bw  = Math.max(Math.ceil(m.width), 1);
+  const PAD = 2;
+  const textY   = ascent + PAD;
+  const srcH    = textY + bSize + descent + PAD;  // full rendered height
+
+  // Render with offset so ascent doesn't clip
+  const tc = document.createElement('canvas');
+  tc.width = bw + PAD; tc.height = Math.max(srcH, bSize * 2);
+  const tx = tc.getContext('2d');
   tx.fillStyle = '#000'; tx.fillRect(0, 0, tc.width, tc.height);
   tx.fillStyle = '#fff'; tx.font = `${bSize}px ${family}`; tx.textBaseline = 'top';
-  tx.fillText(ch, 0, 0);
-  const bw = Math.max(Math.ceil(tx.measureText(ch).width), 1);
+  tx.fillText(ch, 0, textY);
 
+  // Downsample: map srcH source pixels → proportional dest pixels
+  const lw = Math.max(Math.ceil(bw / SCALE), 1);
+  const lh = Math.max(Math.ceil(srcH / SCALE), 1);
   const lc = document.createElement('canvas');
-  lc.width  = Math.max(Math.ceil(bw / SCALE), 1);
-  lc.height = Math.max(size, 1);
-  const lx  = lc.getContext('2d');
+  lc.width = lw; lc.height = lh;
+  const lx = lc.getContext('2d');
   lx.imageSmoothingEnabled = true; lx.imageSmoothingQuality = 'high';
-  lx.drawImage(tc, 0, 0, bw, bSize, 0, 0, lc.width, lc.height);
+  lx.drawImage(tc, 0, 0, bw, srcH, 0, 0, lw, lh);
 
-  const imgData = lx.getImageData(0, 0, lc.width, lc.height).data;
-  const raw = new Uint8Array(lc.width * lc.height);
+  const imgData = lx.getImageData(0, 0, lw, lh).data;
+  const raw = new Uint8Array(lw * lh);
   let maxB = 0;
   for (let i = 0; i < raw.length; i++) { raw[i] = imgData[i * 4]; if (raw[i] > maxB) maxB = raw[i]; }
 
-  const entry = {raw, w: lc.width, h: lc.height, maxB};
+  const entry = {raw, w: lw, h: lh, maxB};
   cjkRawCache.set(key, entry);
   return entry;
 }
@@ -1182,16 +1207,19 @@ function renderCJKText(text, fontKey, spacing, threshPct) {
   const charGrids = [];
   for (const ch of text) charGrids.push(renderCJKChar(ch, size, family, threshPct));
   if (!charGrids.length) return null;
-  const h      = charGrids[0].length;
+  // Heights may differ slightly due to ascent padding – use the max
+  const h      = Math.max(...charGrids.map(g => g.length));
   const totalW = charGrids.reduce((s, g) => s + (g[0]?.length || 0), 0) + (charGrids.length - 1) * sp;
   const grid   = Array.from({length: h}, () => new Array(totalW).fill(0));
   let x = 0;
   for (const cg of charGrids) {
-    const cw = cg[0]?.length || 0;
-    for (let cy = 0; cy < h; cy++) for (let cx2 = 0; cx2 < cw; cx2++) grid[cy][x + cx2] = cg[cy][cx2];
+    const cw = cg[0]?.length || 0, ch2 = cg.length;
+    // Align characters to the bottom row (baseline alignment)
+    const yOffset = h - ch2;
+    for (let cy = 0; cy < ch2; cy++) for (let cx2 = 0; cx2 < cw; cx2++) grid[yOffset + cy][x + cx2] = cg[cy][cx2];
     x += cw + sp;
   }
-  return {grid, width: totalW, height: h};
+  return trimGrid(grid);  // remove any empty top/bottom rows
 }
 
 function trimGrid(grid) {
