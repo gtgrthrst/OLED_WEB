@@ -27,13 +27,29 @@
 - 網格顯示（每 8 格加粗），適合確認 SSD1306 page 邊界
 
 ### 🔤 文字工具
-- **系統字體**：Canvas 2D 超採樣渲染（4×–8×），支援中文 / 任意 Unicode
-- **點陣字體**：5×7 / 3×5 / 8×8 ASCII；中文 8–24px（微軟正黑體 / 宋體 / 等寬）
-- 上傳自訂 TTF / OTF 字體
-- 筆劃閾值（1–100%，相對最亮像素）即時調整
+
+#### 內建像素字體
+
+| 字體 | 尺寸 | 語言支援 | 說明 |
+|------|------|----------|------|
+| **[Cubic-11](https://github.com/ACh-K/Cubic-11)** | 11px 最佳 | 中 / 日 / 韓 / ASCII | 方塊像素風格，所有筆劃對齊格線，OFL 授權 |
+| 5×7 標準 / 粗體 | 固定 7px | ASCII | 經典嵌入式點陣字型 |
+| 3×5 迷你 | 固定 5px | ASCII | 極小尺寸，適合狀態列 |
+| 8×8 等寬 | 固定 8px | ASCII | IBM 風格等寬字型 |
+| 中文 8–24px | 可選 | 繁 / 簡體中文 | 正黑體 / 宋體 / 等寬，超採樣渲染 |
+
+#### 系統 / 自訂字體
+
+- **系統字體**：Canvas 2D 超採樣渲染（4×–8×），支援任意 Unicode 及中文
+- **上傳字體**：直接拖入 TTF / OTF 檔案即可使用
+- **筆劃閾值**（1–100%，相對最亮像素）：低值保留細節，高值使筆劃加粗
+
+> **推薦字體組合**  
+> OLED 顯示中文：**Cubic-11 + 11px** ← 開箱即用，不需另外設定  
+> 英文小字：**5×7 標準** ← 7px 仍保持完整可讀性
 
 ### 🖼 圖示庫
-- **479 個 Google Material Icons**，通過 codepoint 渲染至像素網格
+- **479 個 Google Material Icons**，透過 codepoint 渲染至像素網格
 - 4× 超採樣 + 自適應閾值，確保細節清晰
 - 分類瀏覽 + 即時搜尋
 - 插入尺寸：8 / 12 / 16 / 24 / 32 px
@@ -72,6 +88,17 @@
 - 編碼說明（Row-Major / MSB First 規則）
 - 視覺化像素地圖（`#` / `.`）
 - 前 3 行位元驗證（binary → hex）
+
+#### ✂ 自動裁減空白區域
+
+匯出時勾選「自動裁減空白區域」，自動掃描像素邊界，去除四周空白，產出最緊湊的尺寸：
+
+```
+原始畫布 128×64  ─→  裁減後 42×11 @ (43, 26)
+
+# Cropped from 128×64 canvas, content offset (43, 26)
+hello_data = bytearray([...])   # 僅 6 bytes，而非 1024 bytes
+```
 
 ---
 
@@ -140,9 +167,11 @@ cloudflared tunnel --url http://localhost:8090
 |------|------|
 | 後端 | Go 1.24（標準庫 `net/http`，零依賴） |
 | 前端 | 原生 HTML / CSS / JS（Canvas 2D API） |
-| 字型 | Google Material Icons（codepoint 渲染） |
+| 像素字體 | [Cubic-11](https://github.com/ACh-K/Cubic-11)（OFL）/ 自訂 5×7 / 3×5 / 8×8 點陣 |
+| 圖示 | Google Material Icons（codepoint 渲染，479 個） |
 | ZIP | JSZip 3.10（CDN） |
 | 容器 | Podman / OCI（alpine:3.21，~15 MB） |
+| CI/CD | GitHub Actions（multi-arch，推送至 ghcr.io） |
 
 ---
 
@@ -150,21 +179,32 @@ cloudflared tunnel --url http://localhost:8090
 
 ```
 OLED_WEB/
-├── main.go              # Go HTTP 伺服器 + 匯出 API
+├── main.go                   # Go HTTP 伺服器 + 匯出 API
 ├── go.mod
-├── Containerfile        # 多階段 Podman 建置
-├── compose.yaml         # podman-compose 設定
-├── run.sh               # 快速操作腳本
+├── Containerfile             # 多階段 Podman 建置
+├── compose.yaml              # podman-compose 設定
+├── run.sh                    # 快速操作腳本
+├── .github/workflows/
+│   └── container.yml         # CI：multi-arch 映像建置
 └── static/
-    ├── index.html       # 主頁面（5欄式版面）
-    ├── css/style.css    # 暗色主題 CSS
+    ├── index.html            # 主頁面（5欄式版面）
+    ├── css/style.css         # 暗色主題 CSS
+    ├── fonts/
+    │   └── Cubic_11.ttf     # 內建像素字體（OFL）
     └── js/
-        ├── app.js       # 繪圖引擎 / 圖層 / 頁面管理
-        ├── fonts.js     # ASCII 點陣字體資料
-        └── icons.js     # Material Icons 渲染器
+        ├── app.js            # 繪圖引擎 / 圖層 / 頁面管理
+        ├── fonts.js          # ASCII 點陣字體資料
+        └── icons.js          # Material Icons 渲染器
 ```
 
 ---
+
+## 字體授權
+
+| 字體 | 授權 | 來源 |
+|------|------|------|
+| Cubic-11 | [SIL Open Font License 1.1](https://openfontlicense.org/) | [ACh-K/Cubic-11](https://github.com/ACh-K/Cubic-11) |
+| 5×7 / 3×5 / 8×8 點陣 | Public Domain | 自訂實作 |
 
 ## 授權
 
